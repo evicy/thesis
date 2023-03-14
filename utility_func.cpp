@@ -114,6 +114,14 @@ bool isLayerVertex(Vertex v, const eds_matrix &eds_segments) {
     return eds_segments[v.segment].size() > 1;
 }
 
+bool isFirstLayerVertex(Vertex v, const eds_matrix &eds_segments) {
+    return isLayerVertex(v, eds_segments) && v.layer == 0;
+}
+
+bool isVertexFirstOnLayer(Vertex v, const eds_matrix &eds_segments) {
+    return isLayerVertex(v, eds_segments) && v.index == 0;
+}
+
 bool isJVertex(Vertex v, const eds_matrix &eds_segments) {
     return !isLayerVertex(v, eds_segments) &&
            (v.index == 0 && v.segment > 0 &&
@@ -124,102 +132,56 @@ bool isNVertex(Vertex v, const eds_matrix &eds_segments) {
     return !isLayerVertex(v, eds_segments) && !isJVertex(v, eds_segments);
 }
 
-bool isBaseLayerVertex(Vertex v, const eds_matrix &eds_segments) {
-    assert(isBaseLayerVertex(v, eds_segments));
-    return v.layer == 0;
-}
-
 bool hasPredecessorVertex(Vertex v) { return v.segment != 0 && v.index != 0; }
 
 Vertex getPredecessorVertex(const eds_matrix &eds_segments, Vertex v,
-                            int layer = 0) {
+                            int predecessor_layer = 0) {
     assert(hasPredecessorVertex(v));
     if (v.index != 0) {
         return {v.segment, v.layer, v.index - 1};
     }
-    return {v.segment - 1, layer,
-            static_cast<int>(eds_segments[v.segment - 1][layer].size() - 1)};
+    return {v.segment - 1, predecessor_layer,
+            static_cast<int>(
+                eds_segments[v.segment - 1][predecessor_layer].size() - 1)};
 }
 
-int getPredecessorScore(const eds_matrix &eds_segments, score_matrix &scores,
-                        Vertex v, bool selected, int layer = 0) {
-    if (!hasPredecessorVertex(v)) {
-        // BAD!
-        return 0;
-    }
-    Vertex predecessor = getPredecessorVertex(eds_segments, v, layer);
+int getScore(score_matrix &scores, Vertex v, bool selected,
+             path_continuation layer = I) {
     return scores[v.segment][v.layer][v.index][selected][layer];
 }
 
-void storePath(Vertex store_for, Vertex closest_predecessor_on_path,
-               path_matrix &paths,
-               belonging_path_matrix &belonging_path_starts) {
-    Vertex first_on_path;
-    first_on_path =
-        (store_for == closest_predecessor_on_path)
-            ? store_for
-            : belonging_path_starts[closest_predecessor_on_path.segment]
-                                  [closest_predecessor_on_path.layer]
-                                  [closest_predecessor_on_path.index];
-    assert(first_on_path);
+int getWeight(const weight_matrix &weights, Vertex v) {
+    return weights[v.segment][v.layer][v.index];
+}
 
-    belonging_path_starts[store_for.segment][store_for.layer][store_for.index] =
-        first_on_path;
-    paths[first_on_path.segment][first_on_path.layer][first_on_path.index]
-        .emplace_back(store_for);
+void setScore(score_matrix &scores, int score, Vertex v, bool selected,
+              path_continuation layer = I) {
+    scores[v.segment][v.layer][v.index][selected][layer] = score;
 }
 
 // vector<vector<vector<vector<vector<int>>>>>
-// [segment][layer][index][{SELECTED, !SELECTED}][num of layers]
-score_matrix initScoreMatrix(const vector<vector<vector<int>>> &weights) {
+// [segment][layer][index][{SELECTED, !SELECTED}][I, E]
+score_matrix initScoreMatrix(const weight_matrix &weights) {
     score_matrix scores;
     scores.resize(weights.size());
-    for(int segment = 0; segment < weights.size(); segment++) {
+    for (int segment = 0; segment < weights.size(); segment++) {
         scores[segment].resize(weights[segment].size());
-        for(int layer = 0; layer < weights[segment].size(); layer++) {
+        for (int layer = 0; layer < weights[segment].size(); layer++) {
             scores[segment][layer].resize(weights[segment][layer].size());
-            for(int index = 0; index < weights[segment][layer].size(); index++) {
+            for (int index = 0; index < weights[segment][layer].size();
+                 index++) {
                 scores[segment][layer][index].resize(2);
-                scores[segment][layer][index][0].resize(weights[segment].size());
-                scores[segment][layer][index][1].resize(weights[segment].size());
+                scores[segment][layer][index][0].resize(2);
+                scores[segment][layer][index][1].resize(2);
             }
         }
     }
     return scores;
 }
 
-//typedef vector<vector<vector<vector<Vertex>>>> path_matrix;
-// no paths in the beginning
-path_matrix initPathMatrix(const vector<vector<vector<int>>> &weights) {
-    path_matrix paths;
-    paths.resize(weights.size());
-    for(int segment = 0; segment < weights.size(); segment++) {
-        paths[segment].resize(weights[segment].size());
-        for(int layer = 0; layer < weights[segment].size(); layer++) {
-            paths[segment][layer].resize(weights[segment][layer].size());
-        }
-    }
-    return paths;
-}
-
-// typedef vector<vector<vector<Vertex>>> belonging_path_matrix;
-belonging_path_matrix initBelongingPathMatrix(
-    const vector<vector<vector<int>>> &weights) {
-    belonging_path_matrix belonging_path_starts;
-    belonging_path_starts.resize(weights.size());
-    for (int segment = 0; segment < weights.size(); segment++) {
-        belonging_path_starts[segment].resize(weights[segment].size());
-        for (int layer = 0; layer < weights[segment].size(); layer++) {
-            belonging_path_starts[segment][layer].resize(
-                weights[segment][layer].size());
-        }
-    }
-    return belonging_path_starts;
-}
-
 void findMaxScoringPaths(const eds_matrix &eds_segments,
-                         const vector<vector<vector<int>>> &weights,
-                         score_matrix &scores, path_matrix &paths,
+                         const weight_matrix &weights, score_matrix &scores,
+                         path_matrix &paths,
                          belonging_path_matrix &belonging_path_starts,
                          int penalty = -1) {
     for (int segment = 0; segment < eds_segments.size(); segment++) {
@@ -227,36 +189,90 @@ void findMaxScoringPaths(const eds_matrix &eds_segments,
             for (int index = 0; index < eds_segments[segment][layer].size();
                  index++) {
                 Vertex a{segment, layer, index};
+                int weight_a = getWeight(weights, a);
+
+                // First vertex of the graph.
+                if (!hasPredecessorVertex(a)) {
+                    // W(a, 1) = w(a) - x
+                    int score_a_1 = weight_a - penalty;
+                    setScore(scores, score_a_1, a, SELECTED);
+                    // W(a, 0) = max{0, W(a, 1)}
+                    setScore(scores, max(0, score_a_1), a, !SELECTED);
+                    continue;
+                }
+
                 // N vertex.
                 if (isNVertex(a, eds_segments)) {
                     assert(layer == 0);
+                    // W(a, 1) = w(a) + max{W(p, 0) - x, W(p, 1)}
+                    Vertex p = getPredecessorVertex(eds_segments, a);
+                    int score_p_0 = getScore(scores, p, !SELECTED);
+                    int score_p_1 = getScore(scores, p, SELECTED);
+                    int score_a_1 =
+                        weight_a + max(score_p_0 - penalty, score_p_1);
+                    setScore(scores, score_a_1, a, SELECTED);
 
-                    // W(a, 1, 0) = w(a) + max(W(p, 0, 0) - x, W(p, 1, 0))
-                    scores[segment][layer][index][SELECTED][layer] =
-                        weights[segment][layer][index];
-                    int not_selected_pred_score =
-                        getPredecessorScore(eds_segments, scores, a, !SELECTED,
-                                            layer) -
-                        penalty;
-                    int selected_pred_score = getPredecessorScore(
-                        eds_segments, scores, a, SELECTED, layer);
+                    // W(a, 0) = max{W(p, 0), W(a, 1)}
+                    setScore(scores, max(score_p_0, score_a_1), a, !SELECTED);
+                }
 
-                    if (selected_pred_score >= not_selected_pred_score) {
-                        scores[segment][layer][index][SELECTED][layer] +=
-                            selected_pred_score;
-                        storePath(
-                            a,
-                            hasPredecessorVertex(a)
-                                ? getPredecessorVertex(eds_segments, a, layer)
-                                : a,
-                            paths, belonging_path_starts);
+                // 1st (lowest) layer vertex.
+                else if (isFirstLayerVertex(a, eds_segments)) {
+                    // 1_first vertex.
+                    if (isVertexFirstOnLayer(a, eds_segments)) {
+                        // W(a, 1, I) = w(a) + max{W(p, 0) - x, W(p, 1)}
+                        Vertex p = getPredecessorVertex(eds_segments, a);
+                        int score_p_0 = getScore(scores, p, !SELECTED);
+                        int score_p_1 = getScore(scores, p, SELECTED);
+                        int score_a_1 =
+                            weight_a + max(score_p_0 - penalty, score_p_1);
+                        setScore(scores, score_a_1, a, SELECTED, I);
+
+                        // W(a, 0, I) = max{W(p, 0), W(a, 1, I)}
+
+                        // W(a, 1, E) = w(a) + W(p, 1) - x
+
+                        // W(a, 0, E) = max{W(p, 1), W(a, 1, E)}
+
                     }
+                    // 1_later vertex.
                     else {
-                        scores[segment][layer][index][SELECTED][layer] += not_selected_pred_score;
+                        // W(a, 1, I) = w(a) + max{W(p, 0, I) - x, W(p, 1, I)}
+
+                        // W(a, 0, I) = max{W(p, 0, I), W(a, 1, I)}
+
+                        // W(a, 1, E) = w(a) + max{W(p, 0, E) - x, W(p, 1, E)}
+
+                        // W(a, 0, E) = max{W(p, 0, E), W(a, 1, E)}
+                    }
+                }
+                // L in {2, ..., n} vertex.
+                else if (isLayerVertex(a, eds_segments)) {
+                    // L_first vertex.
+                    if (isVertexFirstOnLayer(a, eds_segments)) {
+                        // W(a, 1, I) = w(a)
+
+                        // W(a, 0, I) = W(a, 1, I)
+
+                        // W(a, 1, E) = w(a) - x
+
+                        // W(a, 0, E) = max{0, W(a, 1, E)}
+                    } 
+                    // L_later vertex.
+                    else {
+                        // W(a, 1, I) = w(a) + max{W(p, 0, I) - x, W(p, 1, I)}
+
+                        // W(a, 0, I) = max{W(p, 0, I), W(a, 1, I)}
+
+                        // W(a, 1, E) = w(a) + max{W(p, 0, E) - x, W(p, 1, E)}
+
+                        // W(a, 0, E) = max{W(p, 0, E), W(a, 1, E)}
+                       
                     }
 
-                    // W(a, 0, 0) = max(W(p, 0, 0) - x, W(a, 1, 0))
-
+                }
+                // J vertex.
+                else if (isJVertex(a, eds_segments)) {
 
                 }
             }

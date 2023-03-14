@@ -34,10 +34,7 @@ int main() {
     cout << scores[1].size() << endl;
     cout << scores[1][1].size() << endl;
     cout << scores[1][1][0].size() << endl;
-    cout << scores[1][1][0][1].size() << endl;
-
-    path_matrix paths = initPathMatrix(weights);
-    belonging_path_matrix belongingPathStarts = initBelongingPathMatrix(weights);
-
+    cout << scores[1][1][0][0].size() << endl;
+    cout << "END" << endl;
     return 0;
 }

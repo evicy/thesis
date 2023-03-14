@@ -22,8 +22,7 @@ eds_matrix EDSToMatrix(const string &EDS);
 // - bases G and C get score 1
 // - empty non-deterministic segment parts get score 0
 // - every other character gets score 0.
-vector<vector<vector<int>>> getGCContentWeights(
-    const eds_matrix &eds_segments);
+vector<vector<vector<int>>> getGCContentWeights(const eds_matrix &eds_segments);
 
 // Find maximum-scoring paths.
 
@@ -33,9 +32,12 @@ struct Vertex {
     int index;
 
     Vertex() : segment(-1), layer(-1), index(-1) {}
-    Vertex(int segment, int layer, int index) : segment(segment), layer(layer), index(index) {}
+    Vertex(int segment, int layer, int index)
+        : segment(segment), layer(layer), index(index) {}
 
-    explicit operator bool() { return !(segment == -1 && layer == -1 && index == -1); }
+    explicit operator bool() {
+        return !(segment == -1 && layer == -1 && index == -1);
+    }
 };
 
 bool operator==(const Vertex &a, const Vertex &b);
@@ -44,6 +46,11 @@ bool operator==(const Vertex &a, const Vertex &b);
 typedef vector<vector<vector<vector<vector<int>>>>> score_matrix;
 typedef vector<vector<vector<vector<Vertex>>>> path_matrix;
 typedef vector<vector<vector<Vertex>>> belonging_path_matrix;
+typedef vector<vector<vector<int>>> weight_matrix;
+
+typedef int path_continuation;
+#define I 0
+#define E 1
 
 // Helper functions for vertex type.
 bool isLayerVertex(Vertex v, const eds_matrix &eds_segments);
@@ -52,30 +59,26 @@ bool isJVertex(Vertex v, const eds_matrix &eds_segments);
 
 bool isNVertex(Vertex v, const eds_matrix &eds_segments);
 
-bool isBaseLayerVertex(Vertex v, const eds_matrix &eds_segments);
+bool isFirstLayerVertex(Vertex v, const eds_matrix &eds_segments);
 
 bool hasPredecessorVertex(Vertex v);
 
-Vertex getPredecessorVertex(const eds_matrix &eds_segments,
-                            Vertex v, int layer);
+Vertex getPredecessorVertex(const eds_matrix &eds_segments, Vertex v,
+                            int predecessor_layer);
 
-int getPredecessorScore(const eds_matrix &eds_segments,
-                        score_matrix &scores,
-                        Vertex v, bool selected, int layer);
+int getScore(score_matrix &scores, Vertex v, bool selected,
+             path_continuation layer);
 
-void storePath(Vertex store_for, Vertex closest_predecessor_on_path,
-               path_matrix &paths,
-               belonging_path_matrix &belonging_path_start);
+void setScore(score_matrix &scores, int score, Vertex v, bool selected,
+              path_continuation layer);
 
-score_matrix initScoreMatrix(const vector<vector<vector<int>>> &weights);
-path_matrix initPathMatrix(const vector<vector<vector<int>>> &weights);
-belonging_path_matrix initBelongingPathMatrix(
-    const vector<vector<vector<int>>> &weights);
+int getWeight(const weight_matrix &weights, Vertex v);
+
+score_matrix initScoreMatrix(const weight_matrix &weights);
 
 void findMaxScoringPaths(const eds_matrix &eds_segments,
-                         const vector<vector<vector<int>>> &weights,
-                         score_matrix &scores,
-                         path_matrix &paths,
+                         const weight_matrix &weights,
+                         score_matrix &scores, path_matrix &paths,
                          belonging_path_matrix &belonging_path_start,
                          int penalty);
 
