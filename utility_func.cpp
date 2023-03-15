@@ -220,30 +220,50 @@ void findMaxScoringPaths(const eds_matrix &eds_segments,
                 else if (isFirstLayerVertex(a, eds_segments)) {
                     // 1_first vertex.
                     if (isVertexFirstOnLayer(a, eds_segments)) {
-                        // W(a, 1, I) = w(a) + max{W(p, 0) - x, W(p, 1)}
                         Vertex p = getPredecessorVertex(eds_segments, a);
                         int score_p_0 = getScore(scores, p, !SELECTED);
                         int score_p_1 = getScore(scores, p, SELECTED);
-                        int score_a_1 =
+                        // W(a, 1, I) = w(a) + max{W(p, 0) - x, W(p, 1)}
+                        int score_a_1_I =
                             weight_a + max(score_p_0 - penalty, score_p_1);
-                        setScore(scores, score_a_1, a, SELECTED, I);
+                        setScore(scores, score_a_1_I, a, SELECTED, I);
 
                         // W(a, 0, I) = max{W(p, 0), W(a, 1, I)}
+                        setScore(scores, max(score_p_0, score_a_1_I), a,
+                                 !SELECTED, I);
 
                         // W(a, 1, E) = w(a) + W(p, 1) - x
+                        int score_a_1_E = weight_a + score_p_1 - penalty;
+                        setScore(scores, score_a_1_E, a, SELECTED, E);
 
                         // W(a, 0, E) = max{W(p, 1), W(a, 1, E)}
-
+                        setScore(scores, max(score_p_1, score_a_1_E), a,
+                                 !SELECTED, E);
                     }
                     // 1_later vertex.
                     else {
+                        Vertex p = getPredecessorVertex(eds_segments, a);
+                        int score_p_0_I = getScore(scores, p, !SELECTED, I);
                         // W(a, 1, I) = w(a) + max{W(p, 0, I) - x, W(p, 1, I)}
+                        int score_a_1_I =
+                            weight_a + max(score_p_0_I - penalty,
+                                           getScore(scores, p, SELECTED, I));
+                        setScore(scores, score_a_1_I, a, SELECTED, I);
 
                         // W(a, 0, I) = max{W(p, 0, I), W(a, 1, I)}
+                        setScore(scores, max(score_p_0_I, score_a_1_I), a,
+                                 !SELECTED, I);
 
                         // W(a, 1, E) = w(a) + max{W(p, 0, E) - x, W(p, 1, E)}
+                        int score_p_0_E = getScore(scores, p, !SELECTED, E);
+                        int score_a_1_E =
+                            weight_a + max(score_p_0_E - penalty,
+                                           getScore(scores, p, SELECTED, E));
+                        setScore(scores, score_a_1_E, a, SELECTED, E);
 
                         // W(a, 0, E) = max{W(p, 0, E), W(a, 1, E)}
+                        setScore(scores, max(score_p_0_E, score_a_1_E), a,
+                                 !SELECTED, E);
                     }
                 }
                 // L in {2, ..., n} vertex.
@@ -251,29 +271,77 @@ void findMaxScoringPaths(const eds_matrix &eds_segments,
                     // L_first vertex.
                     if (isVertexFirstOnLayer(a, eds_segments)) {
                         // W(a, 1, I) = w(a)
+                        int score_a_1_I = weight_a;
+                        setScore(scores, score_a_1_I, a, SELECTED, I);
 
                         // W(a, 0, I) = W(a, 1, I)
+                        setScore(scores, score_a_1_I, a, !SELECTED, I);
 
                         // W(a, 1, E) = w(a) - x
+                        int score_a_1_E = weight_a - penalty;
+                        setScore(scores, score_a_1_E, a, SELECTED, E);
 
                         // W(a, 0, E) = max{0, W(a, 1, E)}
-                    } 
+                        setScore(scores, max(0, score_a_1_E), a, !SELECTED, E);
+                    }
                     // L_later vertex.
                     else {
+                        Vertex p = getPredecessorVertex(eds_segments, a);
+                        int score_p_0_I = getScore(scores, p, !SELECTED, I);
                         // W(a, 1, I) = w(a) + max{W(p, 0, I) - x, W(p, 1, I)}
+                        int score_a_1_I =
+                            weight_a + max(score_p_0_I - penalty,
+                                           getScore(scores, p, SELECTED, I));
+                        setScore(scores, score_a_1_I, a, SELECTED, I);
 
                         // W(a, 0, I) = max{W(p, 0, I), W(a, 1, I)}
+                        setScore(scores, max(score_p_0_I, score_a_1_I), a,
+                                 !SELECTED, I);
 
                         // W(a, 1, E) = w(a) + max{W(p, 0, E) - x, W(p, 1, E)}
+                        int score_p_0_E = getScore(scores, p, !SELECTED, E);
+                        int score_a_1_E =
+                            weight_a + max(score_p_0_E - penalty,
+                                           getScore(scores, p, SELECTED, E));
+                        setScore(scores, score_a_1_E, a, SELECTED, E);
 
                         // W(a, 0, E) = max{W(p, 0, E), W(a, 1, E)}
-                       
+                        setScore(scores, max(score_p_0_E, score_a_1_E), a,
+                                 !SELECTED, E);
                     }
-
                 }
                 // J vertex.
                 else if (isJVertex(a, eds_segments)) {
+                    // W(a, 1) = max{ W(p1, 0, I) + W(p2, 0, E) +...+ W(pb, 0,
+                    // E) - x,
+                    //                                  ...
+                    //                W(p1, 0, E) + W(p2, 0, E) +...+ W(pb, 0,
+                    //                I) - x, W(p1, 1, I) + W(p2, 0, E) +...+
+                    //                W(pb, 0, E),
+                    //                                  ...
+                    //                W(p1, 1, E) + W(p2, 0, E) +...+ W(pb, 0,
+                    //                I),
+                    //                               .  .  .  .
+                    //                W(p1, 0, I) + W(p2, 0, E) +...+ W(pb, 1,
+                    //                E),
+                    //                                  ...
+                    //                W(p1, 0, E) + W(p2, 0, E) +...+ W(pb, 1,
+                    //                I) }
 
+                    int score_a_1 = INT_MIN;
+                    // To avoid n^3 runtime complexity of W(a, 1), calculate a
+                    // base score that is going to be modified: 
+                    // W(p1, 0, I) +  W(p2, 0, E) + ... + W(pb, 0, E)
+                    int base_score = 0;
+                    // Add W(p1, 0, I).
+                    base_score += getScore(
+                        scores, getPredecessorVertex(eds_segments, a, 0),
+                        !SELECTED, I);
+                    // Add scores from remaining predecessors.
+                    for (int i = 1; i < eds_segments[segment].size(); i++) {
+                        Vertex p_i = getPredecessorVertex(eds_segments, a, i);
+                        base_score += getScore(scores, p_i, !SELECTED, E);
+                    }
                 }
             }
         }
