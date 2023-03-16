@@ -132,7 +132,9 @@ bool isNVertex(Vertex v, const eds_matrix &eds_segments) {
     return !isLayerVertex(v, eds_segments) && !isJVertex(v, eds_segments);
 }
 
-bool hasPredecessorVertex(Vertex v) { return v.segment != 0 && v.index != 0; }
+bool hasPredecessorVertex(Vertex v) {
+    return !(v.segment == 0 && v.index == 0);
+}
 
 Vertex getPredecessorVertex(const eds_matrix &eds_segments, Vertex v,
                             int predecessor_layer = 0) {
@@ -179,11 +181,9 @@ score_matrix initScoreMatrix(const weight_matrix &weights) {
     return scores;
 }
 
-void findMaxScoringPaths(const eds_matrix &eds_segments,
-                         const weight_matrix &weights, score_matrix &scores,
-                         path_matrix &paths,
-                         belonging_path_matrix &belonging_path_starts,
-                         int penalty = -1) {
+int findMaxScoringPaths(const eds_matrix &eds_segments,
+                        const weight_matrix &weights, score_matrix &scores,
+                        int penalty = -1) {
     for (int segment = 0; segment < eds_segments.size(); segment++) {
         for (int layer = 0; layer < eds_segments[segment].size(); layer++) {
             for (int index = 0; index < eds_segments[segment][layer].size();
@@ -312,38 +312,92 @@ void findMaxScoringPaths(const eds_matrix &eds_segments,
                 }
                 // J vertex.
                 else if (isJVertex(a, eds_segments)) {
-                    // W(a, 1) = max{ W(p1, 0, I) + W(p2, 0, E) +...+ W(pb, 0,
-                    // E) - x,
-                    //                                  ...
-                    //                W(p1, 0, E) + W(p2, 0, E) +...+ W(pb, 0,
-                    //                I) - x, W(p1, 1, I) + W(p2, 0, E) +...+
-                    //                W(pb, 0, E),
-                    //                                  ...
-                    //                W(p1, 1, E) + W(p2, 0, E) +...+ W(pb, 0,
-                    //                I),
-                    //                               .  .  .  .
-                    //                W(p1, 0, I) + W(p2, 0, E) +...+ W(pb, 1,
-                    //                E),
-                    //                                  ...
-                    //                W(p1, 0, E) + W(p2, 0, E) +...+ W(pb, 1,
-                    //                I) }
-
+                    // W(a, 1) = max{
+                    //      W(p1, 0, I) + W(p2, 0, E) +...+ W(pb, 0, E) - x,
+                    //                         ...
+                    //______W(p1, 0, E) + W(p2, 0, E) +...+ W(pb, 0, I) - x,
+                    //      W(p1, 1, I) + W(p2, 0, E) +...+ W(pb, 0, E),
+                    //                         ...
+                    //______W(p1, 1, E) + W(p2, 0, E) +...+ W(pb, 0, I),
+                    //______               .  .  .  .
+                    //      W(p1, 0, I) + W(p2, 0, E) +...+ W(pb, 1, E),
+                    //                         ...
+                    //      W(p1, 0, E) + W(p2, 0, E) +...+ W(pb, 1, I) }
+                    // where b is the number of layers.
+                    int num_predecessors = eds_segments[segment].size();
                     int score_a_1 = INT_MIN;
-                    // To avoid n^3 runtime complexity of W(a, 1), calculate a
-                    // base score that is going to be modified: 
-                    // W(p1, 0, I) +  W(p2, 0, E) + ... + W(pb, 0, E)
-                    int base_score = 0;
-                    // Add W(p1, 0, I).
-                    base_score += getScore(
-                        scores, getPredecessorVertex(eds_segments, a, 0),
-                        !SELECTED, I);
-                    // Add scores from remaining predecessors.
-                    for (int i = 1; i < eds_segments[segment].size(); i++) {
-                        Vertex p_i = getPredecessorVertex(eds_segments, a, i);
-                        base_score += getScore(scores, p_i, !SELECTED, E);
+                    // Get all predecessors.
+                    vector<Vertex> a_preds(num_predecessors);
+                    for (int i = 0; i < num_predecessors; i++) {
+                        a_preds[i] = getPredecessorVertex(eds_segments, a, i);
                     }
+                    // To avoid n^3 runtime complexity of W(a, 1), calculate a
+                    // base score that is going to be modified:
+                    // W(p1, 0, E) +  W(p2, 0, E) + ... + W(pb, 0, E)
+                    int base_score = 0;
+                    for (int i = 0; i < num_predecessors; i++) {
+                        base_score +=
+                            getScore(scores, a_preds[i], !SELECTED, E);
+                    }
+
+                    // Choose max sum for W(a, 1) based on the rules.
+                    // For all vertices consider !SELECTED values.
+                    for (int path_I = 0; path_I < num_predecessors; path_I++) {
+                        int current_score =
+                            base_score -
+                            getScore(scores, a_preds[path_I], !SELECTED, E) +
+                            getScore(scores, a_preds[path_I], !SELECTED, I) -
+                            penalty;
+                        score_a_1 = max(score_a_1, current_score);
+                    }
+                    // Remaining combinations.
+                    for (int selected_pred = 0;
+                         selected_pred < num_predecessors; selected_pred++) {
+                        int temp_base_score =
+                            base_score -
+                            getScore(scores, a_preds[selected_pred], !SELECTED,
+                                     E) +
+                            getScore(scores, a_preds[selected_pred], SELECTED,
+                                     E);
+                        for (int path_I = 0; path_I < num_predecessors;
+                             path_I++) {
+                            int current_score =
+                                temp_base_score -
+                                getScore(scores, a_preds[path_I],
+                                         selected_pred == path_I ? SELECTED
+                                                                 : !SELECTED,
+                                         E) +
+                                getScore(scores, a_preds[path_I],
+                                         selected_pred == path_I ? SELECTED
+                                                                 : !SELECTED,
+                                         I);
+                            score_a_1 = max(score_a_1, current_score);
+                        }
+                    }
+                    setScore(scores, weight_a + score_a_1, a, SELECTED);
+
+                    // W(a, 0) = max{
+                    //      W(p1, 0, I) + W(p2, 0, E) +...+ W(pb, 0, E),
+                    //                         ...
+                    //______W(p1, 0, E) + W(p2, 0, E) +...+ W(pb, 0, I),
+                    //      W(a, 1)
+                    // where b is the number of layers.
+                    int score_a_0 = INT_MIN;
+                    for (int path_I = 0; path_I < num_predecessors; path_I++) {
+                        int current_score =
+                            base_score -
+                            getScore(scores, a_preds[path_I], !SELECTED, E) +
+                            getScore(scores, a_preds[path_I], !SELECTED, I);
+                        score_a_0 = max(score_a_0, current_score);
+                    }
+                    setScore(scores, max(score_a_0, score_a_1), a, !SELECTED);
+                } else {
+                    assert(false);
                 }
             }
         }
     }
+    return max(
+        {scores.back().back().back()[0][0], scores.back().back().back()[0][1],
+         scores.back().back().back()[1][0], scores.back().back().back()[1][1]});
 }

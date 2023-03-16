@@ -11,7 +11,7 @@
 using namespace std;
 
 int main() {
-    string EDS = readEDSFile("input.txt");
+    string EDS = readEDSFile("test_input.txt");
     // Remove leading and trailing white spaces.
     boost::trim(EDS);
     cout << EDS << endl;
@@ -31,10 +31,13 @@ int main() {
 
     score_matrix scores = initScoreMatrix(weights);
     cout << scores.size() << endl;
-    cout << scores[1].size() << endl;
-    cout << scores[1][1].size() << endl;
-    cout << scores[1][1][0].size() << endl;
-    cout << scores[1][1][0][0].size() << endl;
+    // cout << scores[1].size() << endl;
+    // cout << scores[1][1].size() << endl;
+    // cout << scores[1][1][0].size() << endl;
+    // cout << scores[1][1][0][0].size() << endl;
+
+    int result = findMaxScoringPaths(eds_segments, weights, scores, 10);
+    cout << "RESULT: " << result << endl;
     cout << "END" << endl;
     return 0;
 }

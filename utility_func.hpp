@@ -44,8 +44,6 @@ bool operator==(const Vertex &a, const Vertex &b);
 
 #define SELECTED true
 typedef vector<vector<vector<vector<vector<int>>>>> score_matrix;
-typedef vector<vector<vector<vector<Vertex>>>> path_matrix;
-typedef vector<vector<vector<Vertex>>> belonging_path_matrix;
 typedef vector<vector<vector<int>>> weight_matrix;
 
 typedef int path_continuation;
@@ -76,10 +74,9 @@ int getWeight(const weight_matrix &weights, Vertex v);
 
 score_matrix initScoreMatrix(const weight_matrix &weights);
 
-void findMaxScoringPaths(const eds_matrix &eds_segments,
+int findMaxScoringPaths(const eds_matrix &eds_segments,
                          const weight_matrix &weights,
-                         score_matrix &scores, path_matrix &paths,
-                         belonging_path_matrix &belonging_path_start,
+                         score_matrix &scores,
                          int penalty);
 
 #endif
