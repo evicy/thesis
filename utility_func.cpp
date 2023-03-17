@@ -1,6 +1,5 @@
 #include "utility_func.hpp"
 
-#include <boost/algorithm/string/trim.hpp>
 #include <fstream>
 #include <iostream>
 #include <sstream>
@@ -10,6 +9,9 @@
 using namespace std;
 
 // Returns the one line elastic-degenerate string file as a string.
+// Adds a letter N to the start and also to the end of the string to make sure
+// the elastic-degenerate string equals with the n-layered bubble graph
+// definition. These two letters should get score 0.
 string readEDSFile(const string &file_path) {
     ifstream input_stream(file_path);
 
@@ -18,9 +20,11 @@ string readEDSFile(const string &file_path) {
         return "";
     }
     assert(input_stream.good());
-    return static_cast<stringstream const &>(stringstream()
+    return "N" +
+           static_cast<stringstream const &>(stringstream()
                                              << input_stream.rdbuf())
-        .str();
+               .str() +
+           "N";
 }
 
 // Store the elastic degenerate string `text` in a 2D matrix.
@@ -110,6 +114,12 @@ bool operator==(const Vertex &a, const Vertex &b) {
 }
 
 // Helper functions for Vertex type.
+Vertex getLastVertex(const eds_matrix &eds_segments) {
+    int last_segment = eds_segments.size() - 1;
+    int last_index = eds_segments[last_segment][0].size() - 1; 
+    return Vertex(last_segment, 0, last_index);
+}
+
 bool isLayerVertex(Vertex v, const eds_matrix &eds_segments) {
     return eds_segments[v.segment].size() > 1;
 }
@@ -148,17 +158,29 @@ Vertex getPredecessorVertex(const eds_matrix &eds_segments, Vertex v,
 }
 
 int getScore(score_matrix &scores, Vertex v, bool selected,
-             path_continuation layer = I) {
-    return scores[v.segment][v.layer][v.index][selected][layer];
+             path_continuation path_goes = I) {
+    return scores[v.segment][v.layer][v.index][selected][path_goes];
+}
+
+int getChoice(score_matrix &choices, Vertex v, bool selected,
+             path_continuation path_goes = I) {
+    return choices[v.segment][v.layer][v.index][selected][path_goes];
 }
 
 int getWeight(const weight_matrix &weights, Vertex v) {
     return weights[v.segment][v.layer][v.index];
 }
 
-void setScore(score_matrix &scores, int score, Vertex v, bool selected,
-              path_continuation layer = I) {
-    scores[v.segment][v.layer][v.index][selected][layer] = score;
+pair<int, int> max_score(int first_score, int second_score) {
+    return first_score >= second_score ? make_pair(first_score, FIRST)
+                                       : make_pair(second_score, SECOND);
+}
+
+void setScoreAndChoice(score_matrix &scores, score_matrix &choices,
+                       pair<int, int> score_choice, Vertex v, bool selected,
+                       path_continuation layer = I) {
+    scores[v.segment][v.layer][v.index][selected][layer] = score_choice.first;
+    choices[v.segment][v.layer][v.index][selected][layer] = score_choice.second;
 }
 
 // vector<vector<vector<vector<vector<int>>>>>
@@ -183,7 +205,7 @@ score_matrix initScoreMatrix(const weight_matrix &weights) {
 
 int findMaxScoringPaths(const eds_matrix &eds_segments,
                         const weight_matrix &weights, score_matrix &scores,
-                        int penalty = -1) {
+                        score_matrix &choices, int penalty = -1) {
     for (int segment = 0; segment < eds_segments.size(); segment++) {
         for (int layer = 0; layer < eds_segments[segment].size(); layer++) {
             for (int index = 0; index < eds_segments[segment][layer].size();
@@ -195,27 +217,30 @@ int findMaxScoringPaths(const eds_matrix &eds_segments,
                 if (!hasPredecessorVertex(a)) {
                     // W(a, 1) = w(a) - x
                     int score_a_1 = weight_a - penalty;
-                    setScore(scores, score_a_1, a, SELECTED);
+                    setScoreAndChoice(scores, choices,
+                                      make_pair(score_a_1, FIRST), a, SELECTED);
                     // W(a, 0) = max{0, W(a, 1)}
-                    setScore(scores, max(0, score_a_1), a, !SELECTED);
-                    continue;
+                    setScoreAndChoice(scores, choices, max_score(0, score_a_1),
+                                      a, !SELECTED);
                 }
-
                 // N vertex.
-                if (isNVertex(a, eds_segments)) {
+                else if (isNVertex(a, eds_segments)) {
                     assert(layer == 0);
                     // W(a, 1) = w(a) + max{W(p, 0) - x, W(p, 1)}
                     Vertex p = getPredecessorVertex(eds_segments, a);
                     int score_p_0 = getScore(scores, p, !SELECTED);
                     int score_p_1 = getScore(scores, p, SELECTED);
-                    int score_a_1 =
-                        weight_a + max(score_p_0 - penalty, score_p_1);
-                    setScore(scores, score_a_1, a, SELECTED);
+                    setScoreAndChoice(
+                        scores, choices,
+                        max_score(weight_a + score_p_0 - penalty, weight_a + score_p_1),
+                        a, SELECTED);
 
                     // W(a, 0) = max{W(p, 0), W(a, 1)}
-                    setScore(scores, max(score_p_0, score_a_1), a, !SELECTED);
+                    setScoreAndChoice(
+                        scores, choices,
+                        max_score(score_p_0, getScore(scores, a, SELECTED)), a,
+                        !SELECTED);
                 }
-
                 // 1st (lowest) layer vertex.
                 else if (isFirstLayerVertex(a, eds_segments)) {
                     // 1_first vertex.
@@ -224,46 +249,64 @@ int findMaxScoringPaths(const eds_matrix &eds_segments,
                         int score_p_0 = getScore(scores, p, !SELECTED);
                         int score_p_1 = getScore(scores, p, SELECTED);
                         // W(a, 1, I) = w(a) + max{W(p, 0) - x, W(p, 1)}
-                        int score_a_1_I =
-                            weight_a + max(score_p_0 - penalty, score_p_1);
-                        setScore(scores, score_a_1_I, a, SELECTED, I);
+                        setScoreAndChoice(
+                            scores, choices,
+                            max_score(weight_a + score_p_0 - penalty,
+                                      weight_a + score_p_1),
+                            a, SELECTED, I);
 
                         // W(a, 0, I) = max{W(p, 0), W(a, 1, I)}
-                        setScore(scores, max(score_p_0, score_a_1_I), a,
-                                 !SELECTED, I);
+                        setScoreAndChoice(
+                            scores, choices,
+                            max_score(score_p_0,
+                                      getScore(scores, a, SELECTED, I)),
+                            a, !SELECTED, I);
 
                         // W(a, 1, E) = w(a) + W(p, 1) - x
                         int score_a_1_E = weight_a + score_p_1 - penalty;
-                        setScore(scores, score_a_1_E, a, SELECTED, E);
+                        setScoreAndChoice(scores, choices,
+                                          make_pair(score_a_1_E, FIRST), a,
+                                          SELECTED, E);
 
                         // W(a, 0, E) = max{W(p, 1), W(a, 1, E)}
-                        setScore(scores, max(score_p_1, score_a_1_E), a,
-                                 !SELECTED, E);
+                        setScoreAndChoice(scores, choices,
+                                          max_score(score_p_1, score_a_1_E), a,
+                                          !SELECTED, E);
                     }
                     // 1_later vertex.
                     else {
                         Vertex p = getPredecessorVertex(eds_segments, a);
                         int score_p_0_I = getScore(scores, p, !SELECTED, I);
+                        int score_p_1_I = getScore(scores, p, SELECTED, I);
                         // W(a, 1, I) = w(a) + max{W(p, 0, I) - x, W(p, 1, I)}
-                        int score_a_1_I =
-                            weight_a + max(score_p_0_I - penalty,
-                                           getScore(scores, p, SELECTED, I));
-                        setScore(scores, score_a_1_I, a, SELECTED, I);
+                        setScoreAndChoice(
+                            scores, choices,
+                            max_score(weight_a + score_p_0_I - penalty,
+                                      weight_a + score_p_1_I),
+                            a, SELECTED, I);
 
                         // W(a, 0, I) = max{W(p, 0, I), W(a, 1, I)}
-                        setScore(scores, max(score_p_0_I, score_a_1_I), a,
-                                 !SELECTED, I);
+                        setScoreAndChoice(
+                            scores, choices,
+                            max_score(score_p_0_I,
+                                      getScore(scores, a, SELECTED, I)),
+                            a, !SELECTED, I);
 
                         // W(a, 1, E) = w(a) + max{W(p, 0, E) - x, W(p, 1, E)}
                         int score_p_0_E = getScore(scores, p, !SELECTED, E);
-                        int score_a_1_E =
-                            weight_a + max(score_p_0_E - penalty,
-                                           getScore(scores, p, SELECTED, E));
-                        setScore(scores, score_a_1_E, a, SELECTED, E);
+                        int score_p_1_E = getScore(scores, p, SELECTED, E);
+                        setScoreAndChoice(
+                            scores, choices,
+                            max_score(weight_a + score_p_0_E - penalty,
+                                      weight_a + score_p_1_E),
+                            a, SELECTED, E);
 
                         // W(a, 0, E) = max{W(p, 0, E), W(a, 1, E)}
-                        setScore(scores, max(score_p_0_E, score_a_1_E), a,
-                                 !SELECTED, E);
+                        setScoreAndChoice(
+                            scores, choices,
+                            max_score(score_p_0_E,
+                                      getScore(scores, a, SELECTED, E)),
+                            a, !SELECTED, E);
                     }
                 }
                 // L in {2, ..., n} vertex.
@@ -272,42 +315,60 @@ int findMaxScoringPaths(const eds_matrix &eds_segments,
                     if (isVertexFirstOnLayer(a, eds_segments)) {
                         // W(a, 1, I) = w(a)
                         int score_a_1_I = weight_a;
-                        setScore(scores, score_a_1_I, a, SELECTED, I);
+                        setScoreAndChoice(scores, choices,
+                                          make_pair(score_a_1_I, FIRST), a,
+                                          SELECTED, I);
 
                         // W(a, 0, I) = W(a, 1, I)
-                        setScore(scores, score_a_1_I, a, !SELECTED, I);
+                        setScoreAndChoice(scores, choices,
+                                          make_pair(score_a_1_I, FIRST), a,
+                                          !SELECTED, I);
 
                         // W(a, 1, E) = w(a) - x
                         int score_a_1_E = weight_a - penalty;
-                        setScore(scores, score_a_1_E, a, SELECTED, E);
+                        setScoreAndChoice(scores, choices,
+                                          make_pair(score_a_1_E, FIRST), a,
+                                          SELECTED, E);
 
                         // W(a, 0, E) = max{0, W(a, 1, E)}
-                        setScore(scores, max(0, score_a_1_E), a, !SELECTED, E);
+                        setScoreAndChoice(scores, choices,
+                                          max_score(0, score_a_1_E), a,
+                                          !SELECTED, E);
                     }
                     // L_later vertex.
                     else {
                         Vertex p = getPredecessorVertex(eds_segments, a);
                         int score_p_0_I = getScore(scores, p, !SELECTED, I);
+                        int score_p_1_I = getScore(scores, p, SELECTED, I);
                         // W(a, 1, I) = w(a) + max{W(p, 0, I) - x, W(p, 1, I)}
-                        int score_a_1_I =
-                            weight_a + max(score_p_0_I - penalty,
-                                           getScore(scores, p, SELECTED, I));
-                        setScore(scores, score_a_1_I, a, SELECTED, I);
+                        setScoreAndChoice(
+                            scores, choices,
+                            max_score(weight_a + score_p_0_I - penalty,
+                                      weight_a + score_p_1_I),
+                            a, SELECTED, I);
 
                         // W(a, 0, I) = max{W(p, 0, I), W(a, 1, I)}
-                        setScore(scores, max(score_p_0_I, score_a_1_I), a,
-                                 !SELECTED, I);
+                        setScoreAndChoice(
+                            scores, choices,
+                            max_score(score_p_0_I,
+                                      getScore(scores, a, SELECTED, I)),
+                            a, !SELECTED, I);
 
                         // W(a, 1, E) = w(a) + max{W(p, 0, E) - x, W(p, 1, E)}
                         int score_p_0_E = getScore(scores, p, !SELECTED, E);
-                        int score_a_1_E =
-                            weight_a + max(score_p_0_E - penalty,
-                                           getScore(scores, p, SELECTED, E));
-                        setScore(scores, score_a_1_E, a, SELECTED, E);
+                        int score_p_1_E = getScore(scores, p, SELECTED, E);
+                        setScoreAndChoice(
+                            scores, choices,
+                            max_score(weight_a + score_p_0_E - penalty,
+                                      weight_a + score_p_1_E),
+                            a, SELECTED, E);
 
                         // W(a, 0, E) = max{W(p, 0, E), W(a, 1, E)}
-                        setScore(scores, max(score_p_0_E, score_a_1_E), a,
-                                 !SELECTED, E);
+                        setScoreAndChoice(
+                            scores, choices,
+                            max_score(score_p_0_E,
+                                      getScore(scores, a, SELECTED, E)),
+                            a, !SELECTED, E);
                     }
                 }
                 // J vertex.
@@ -323,44 +384,45 @@ int findMaxScoringPaths(const eds_matrix &eds_segments,
                     //      W(p1, 0, I) + W(p2, 0, E) +...+ W(pb, 1, E),
                     //                         ...
                     //      W(p1, 0, E) + W(p2, 0, E) +...+ W(pb, 1, I) }
-                    // where b is the number of layers.
-                    int num_predecessors = eds_segments[segment].size();
-                    int score_a_1 = INT_MIN;
+                    // where b is the number of layers in the current bubble.
+                    int num_preds = eds_segments[segment].size();
                     // Get all predecessors.
-                    vector<Vertex> a_preds(num_predecessors);
-                    for (int i = 0; i < num_predecessors; i++) {
+                    vector<Vertex> a_preds(num_preds);
+                    for (int i = 0; i < num_preds; i++) {
                         a_preds[i] = getPredecessorVertex(eds_segments, a, i);
                     }
                     // To avoid n^3 runtime complexity of W(a, 1), calculate a
                     // base score that is going to be modified:
                     // W(p1, 0, E) +  W(p2, 0, E) + ... + W(pb, 0, E)
                     int base_score = 0;
-                    for (int i = 0; i < num_predecessors; i++) {
-                        base_score +=
-                            getScore(scores, a_preds[i], !SELECTED, E);
+                    for (const Vertex &p : a_preds) {
+                        base_score += getScore(scores, p, !SELECTED, E);
                     }
-
                     // Choose max sum for W(a, 1) based on the rules.
-                    // For all vertices consider !SELECTED values.
-                    for (int path_I = 0; path_I < num_predecessors; path_I++) {
+                    // 1st group in max:
+                    int choice_a_1 = 0;
+                    int score_a_1 = INT_MIN;
+                    for (int path_I = 0; path_I < num_preds; path_I++) {
                         int current_score =
                             base_score -
                             getScore(scores, a_preds[path_I], !SELECTED, E) +
                             getScore(scores, a_preds[path_I], !SELECTED, I) -
                             penalty;
-                        score_a_1 = max(score_a_1, current_score);
+                        if (score_a_1 < current_score) {
+                            score_a_1 = current_score;
+                            choice_a_1 = path_I;
+                        }
                     }
-                    // Remaining combinations.
-                    for (int selected_pred = 0;
-                         selected_pred < num_predecessors; selected_pred++) {
+                    // Remaining groups:
+                    for (int selected_pred = 0; selected_pred < num_preds;
+                         selected_pred++) {
                         int temp_base_score =
                             base_score -
                             getScore(scores, a_preds[selected_pred], !SELECTED,
                                      E) +
                             getScore(scores, a_preds[selected_pred], SELECTED,
                                      E);
-                        for (int path_I = 0; path_I < num_predecessors;
-                             path_I++) {
+                        for (int path_I = 0; path_I < num_preds; path_I++) {
                             int current_score =
                                 temp_base_score -
                                 getScore(scores, a_preds[path_I],
@@ -371,26 +433,43 @@ int findMaxScoringPaths(const eds_matrix &eds_segments,
                                          selected_pred == path_I ? SELECTED
                                                                  : !SELECTED,
                                          I);
-                            score_a_1 = max(score_a_1, current_score);
+                            if (score_a_1 < current_score) {
+                                score_a_1 = current_score;
+                                choice_a_1 =
+                                    (selected_pred + 1) * num_preds + path_I;
+                            }
                         }
                     }
-                    setScore(scores, weight_a + score_a_1, a, SELECTED);
+                    setScoreAndChoice(
+                        scores, choices,
+                        make_pair(weight_a + score_a_1, choice_a_1), a,
+                        SELECTED);
 
                     // W(a, 0) = max{
                     //      W(p1, 0, I) + W(p2, 0, E) +...+ W(pb, 0, E),
                     //                         ...
                     //______W(p1, 0, E) + W(p2, 0, E) +...+ W(pb, 0, I),
                     //      W(a, 1)
-                    // where b is the number of layers.
+                    // where b is the number of layers in the current bubble.
                     int score_a_0 = INT_MIN;
-                    for (int path_I = 0; path_I < num_predecessors; path_I++) {
+                    int choice_a_0 = 0;
+                    for (int path_I = 0; path_I < num_preds; path_I++) {
                         int current_score =
                             base_score -
                             getScore(scores, a_preds[path_I], !SELECTED, E) +
                             getScore(scores, a_preds[path_I], !SELECTED, I);
-                        score_a_0 = max(score_a_0, current_score);
+                        if (score_a_0 < current_score) {
+                            score_a_0 = current_score;
+                            choice_a_0 = path_I;
+                        }
                     }
-                    setScore(scores, max(score_a_0, score_a_1), a, !SELECTED);
+                    if (score_a_0 < score_a_1) {
+                        score_a_0 = score_a_1;
+                        choice_a_0 = num_preds;
+                    }
+                    setScoreAndChoice(scores, choices,
+                                      make_pair(score_a_0, choice_a_0), a,
+                                      !SELECTED);
                 } else {
                     assert(false);
                 }
@@ -400,4 +479,32 @@ int findMaxScoringPaths(const eds_matrix &eds_segments,
     return max(
         {scores.back().back().back()[0][0], scores.back().back().back()[0][1],
          scores.back().back().back()[1][0], scores.back().back().back()[1][1]});
+}
+
+vector<vector<Vertex>> getPaths(const eds_matrix &eds_segments,
+                                score_matrix &scores, score_matrix &choices) {
+    vector<vector<Vertex>> paths;
+
+    Vertex a = getLastVertex(eds_segments);
+    vector<Vertex> path;
+    while (hasPredecessorVertex(a)) {
+        // N vertex.
+        if (isNVertex(a, eds_segments)) {
+            
+        }
+    }
+
+
+    // for (int segment = eds_segments.size() - 1; segment >= 0; segment--) {
+    //     for (int layer = eds_segments[segment].size() - 1; layer >= 0;
+    //          layer--) {
+    //         for (int index = eds_segments[segment][layer].size() - 1;
+    //              index >= 0; index--) {
+    //             Vertex a(segment, layer, index);
+    //             getChoice(choices, a, )
+    //         }
+    //     }
+    // }
+
+    return paths;
 }

@@ -51,6 +51,8 @@ typedef int path_continuation;
 #define E 1
 
 // Helper functions for vertex type.
+Vertex getLastVertex(const eds_matrix &eds_segments);
+
 bool isLayerVertex(Vertex v, const eds_matrix &eds_segments);
 
 bool isJVertex(Vertex v, const eds_matrix &eds_segments);
@@ -65,10 +67,16 @@ Vertex getPredecessorVertex(const eds_matrix &eds_segments, Vertex v,
                             int predecessor_layer);
 
 int getScore(score_matrix &scores, Vertex v, bool selected,
-             path_continuation layer);
+             path_continuation path_goes);
 
-void setScore(score_matrix &scores, int score, Vertex v, bool selected,
-              path_continuation layer);
+#define FIRST 0
+#define SECOND 1
+
+pair<int, int> max_score(int first_score, int second_score);
+
+void setScoreAndChoice(score_matrix &scores, score_matrix &choices,
+                       pair<int,int> score_choice, Vertex v, bool selected,
+                       path_continuation layer);
 
 int getWeight(const weight_matrix &weights, Vertex v);
 
@@ -77,6 +85,7 @@ score_matrix initScoreMatrix(const weight_matrix &weights);
 int findMaxScoringPaths(const eds_matrix &eds_segments,
                          const weight_matrix &weights,
                          score_matrix &scores,
+                         score_matrix &choices,
                          int penalty);
 
 #endif

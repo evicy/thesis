@@ -30,14 +30,17 @@ int main() {
     }
 
     score_matrix scores = initScoreMatrix(weights);
+    score_matrix choices = initScoreMatrix(weights);
     cout << scores.size() << endl;
     // cout << scores[1].size() << endl;
     // cout << scores[1][1].size() << endl;
     // cout << scores[1][1][0].size() << endl;
     // cout << scores[1][1][0][0].size() << endl;
 
-    int result = findMaxScoringPaths(eds_segments, weights, scores, 10);
+    int result = findMaxScoringPaths(eds_segments, weights, scores, choices, 10);
     cout << "RESULT: " << result << endl;
+    cout << "Number of segments: " << getLastVertex(eds_segments).segment << endl;
+    cout << "Number of indices: " << getLastVertex(eds_segments).index << endl;
     cout << "END" << endl;
     return 0;
 }
