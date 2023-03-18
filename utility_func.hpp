@@ -11,6 +11,7 @@
 using namespace std;
 
 typedef vector<vector<string>> eds_matrix;
+typedef vector<vector<vector<int>>> weight_matrix;
 
 // Empty strings used to create a bubble graph from EDS.
 #define EMPTY_STR '_'
@@ -25,7 +26,8 @@ eds_matrix EDSToMatrix(const string &EDS);
 // - bases G and C get score 1
 // - empty non-deterministic segment parts get score 0
 // - every other character gets score 0.
-vector<vector<vector<int>>> getGCContentWeights(const eds_matrix &eds_segments);
+vector<vector<vector<int>>> getGCContentWeights(
+    const eds_matrix &eds_segments, int match=1, int non_match=-1);
 
 // Find maximum-scoring paths.
 
@@ -47,8 +49,6 @@ bool operator==(const Vertex &a, const Vertex &b);
 
 #define SELECTED true
 typedef vector<vector<vector<vector<vector<int>>>>> score_matrix;
-typedef vector<vector<vector<int>>> weight_matrix;
-
 typedef int path_continuation;
 #define I 0
 #define E 1

@@ -37,6 +37,51 @@ bool TEST_EDSToMatrix() {
     return eds_segments == expected;
 }
 
+int run_findMaxScoringPaths_01(string EDS) {
+    eds_matrix eds_segments = EDSToMatrix(EDS);
+    weight_matrix weights = getGCContentWeights(eds_segments, 1, -1);
+
+    score_matrix scores = initScoreMatrix(weights);
+    score_matrix choices = initScoreMatrix(weights);
+
+    return findMaxScoringPaths(eds_segments, weights, scores, choices, 2);
+}
+
+bool TEST_findMaxScoringPaths_01() {
+    cout << __func__ << ": ";
+
+    string EDS = "_GGG{CCG,AGGGA}A_";
+    return run_findMaxScoringPaths_01(EDS) == 5;
+}
+
+bool TEST_findMaxScoringPaths_02() {
+    cout << __func__ << ": ";
+
+    string EDS = "_GGG{ATT,ATA}AGCGC_";
+    return run_findMaxScoringPaths_01(EDS) == 3;
+}
+
+bool TEST_findMaxScoringPaths_03() {
+    cout << __func__ << ": ";
+
+    string EDS = "_GGG{ATT,ATA,}AGCGC_";
+    return run_findMaxScoringPaths_01(EDS) == 4;
+}
+
+bool TEST_findMaxScoringPaths_04() {
+    cout << __func__ << ": ";
+
+    string EDS = "_AG{GGG,,CCC}{AG,GCGG,AA}A{A,G}{G,CC}{AAAA,}_";
+    return run_findMaxScoringPaths_01(EDS) == 9;
+}
+
+bool TEST_findMaxScoringPaths_05() {
+    cout << __func__ << ": ";
+
+    string EDS = "_GG{AGAA,GGGA,,ACCCCC}{AG,G}AGG{A,G}{C,}{A,AG}G{A,GA,CCC}{,A}_";
+    return run_findMaxScoringPaths_01(EDS) == 14;
+}
+
 void printEDSwithWeights() {
     string EDS = readEDSFile("input_04.txt");
     cout << EDS << endl;

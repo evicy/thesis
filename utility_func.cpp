@@ -99,7 +99,7 @@ eds_matrix EDSToMatrix(const string &EDS) {
 // - empty non-deterministic segment parts get score 0
 // - every other character gets score 0.
 vector<vector<vector<int>>> getGCContentWeights(
-    const eds_matrix &eds_segments) {
+    const eds_matrix &eds_segments, int match, int non_match) {
     vector<vector<vector<int>>> weights;
     weights.reserve(eds_segments.size());
     for (const auto &segment : eds_segments) {
@@ -111,7 +111,7 @@ vector<vector<vector<int>>> getGCContentWeights(
                 if (str[i] == EMPTY_STR) {
                     w_str[i] = 0;
                 } else {
-                    w_str[i] = (str[i] == 'G' || str[i] == 'C') ? 1 : -1;
+                    w_str[i] = (str[i] == 'G' || str[i] == 'C') ? match : non_match;
                 }
             }
             w_segment.emplace_back(w_str);
@@ -490,10 +490,11 @@ int findMaxScoringPaths(const eds_matrix &eds_segments,
             }
         }
     }
-    return max({scores.back().back().back()[SELECTED][I],
-                scores.back().back().back()[SELECTED][E],
-                scores.back().back().back()[!SELECTED][I],
-                scores.back().back().back()[!SELECTED][E]});
+    Vertex last = getLastVertex(eds_segments);
+    assert(isNVertex(last, eds_segments) || isJVertex(last,eds_segments));
+    const auto &last_data = scores[last.segment][last.layer][last.index];
+    return max({last_data[SELECTED][I], last_data[SELECTED][E],
+                last_data[!SELECTED][I], last_data[!SELECTED][E]});
 }
 
 vector<vector<Vertex>> getPaths(const eds_matrix &eds_segments,

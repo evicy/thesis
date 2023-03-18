@@ -21,5 +21,10 @@ int main(){
 
     run_test(TEST_readEDSFile);
     run_test(TEST_EDSToMatrix);
-    printEDSwithWeights();
+    run_test(TEST_findMaxScoringPaths_01);
+    run_test(TEST_findMaxScoringPaths_02);
+    run_test(TEST_findMaxScoringPaths_03);
+    run_test(TEST_findMaxScoringPaths_04);
+    run_test(TEST_findMaxScoringPaths_05);
+    //printEDSwithWeights();
 }
