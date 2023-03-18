@@ -5,6 +5,7 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <cassert>
 
 using namespace std;
 
@@ -20,11 +21,11 @@ string readEDSFile(const string &file_path) {
         return "";
     }
     assert(input_stream.good());
-    return "N" +
+    return EMPTY_STR +
            static_cast<stringstream const &>(stringstream()
                                              << input_stream.rdbuf())
                .str() +
-           "N";
+           EMPTY_STR;
 }
 
 // Store the elastic degenerate string `text` in a 2D matrix.
@@ -35,13 +36,18 @@ eds_matrix EDSToMatrix(const string &EDS) {
     string current_string;
     bool in_nondet_segment = false;
 
-    for (char const &c : EDS) {
+    for (int i = 0; i < EDS.length(); i++) {
+        char c = EDS[i];
         // Inside a string or segment.
         if (c != '{' && c != '}') {
             // Commas can be only inside segments.
             assert(in_nondet_segment || c != ',');
 
             if (c == ',') {
+                // Empty layers are are denoted by a vertex with value "_".
+                if (current_string.empty()) {
+                    current_string += EMPTY_STR;
+                }
                 current_segment.emplace_back(current_string);
                 current_string.clear();
             } else {
@@ -52,8 +58,12 @@ eds_matrix EDSToMatrix(const string &EDS) {
         else if (c == '{') {
             assert(!in_nondet_segment && current_segment.empty());
             in_nondet_segment = true;
-            // Start of a non-deterministic segment after a deterministic
-            // segment.
+            // Starts after another non-deterministic
+            // segment: separate them with with an empty deterministic segment.
+            if (i > 0 && EDS[i-1] == '}'){
+                eds_segments.emplace_back(vector<string>{string(1, EMPTY_STR)});
+            }
+            // Starts after a deterministic segment.
             if (!current_string.empty()) {
                 eds_segments.emplace_back(vector<string>{move(current_string)});
                 current_string.clear();
@@ -62,6 +72,10 @@ eds_matrix EDSToMatrix(const string &EDS) {
         // End of a segment.
         else {
             assert(c == '}' && in_nondet_segment && !current_segment.empty());
+            // Empty layers are are denoted by a vertex with value "_".
+            if (current_string.empty()) {
+                current_string += EMPTY_STR;
+            }
             current_segment.emplace_back(current_string);
             current_string.clear();
 
@@ -93,12 +107,12 @@ vector<vector<vector<int>>> getGCContentWeights(
         w_segment.reserve(segment.size());
         for (const auto &str : segment) {
             vector<int> w_str(str.size(), 0);
-
-            // To an empty string assign value 0.
-            if (str.empty()) w_str.push_back(0);
-
             for (int i = 0; i < str.size(); i++) {
-                w_str[i] = (str[i] == 'G' || str[i] == 'C') ? 1 : 0;
+                if (str[i] == EMPTY_STR) {
+                    w_str[i] = 0;
+                } else {
+                    w_str[i] = (str[i] == 'G' || str[i] == 'C') ? 1 : -1;
+                }
             }
             w_segment.emplace_back(w_str);
         }
@@ -116,7 +130,7 @@ bool operator==(const Vertex &a, const Vertex &b) {
 // Helper functions for Vertex type.
 Vertex getLastVertex(const eds_matrix &eds_segments) {
     int last_segment = eds_segments.size() - 1;
-    int last_index = eds_segments[last_segment][0].size() - 1; 
+    int last_index = eds_segments[last_segment][0].size() - 1;
     return Vertex(last_segment, 0, last_index);
 }
 
@@ -163,7 +177,7 @@ int getScore(score_matrix &scores, Vertex v, bool selected,
 }
 
 int getChoice(score_matrix &choices, Vertex v, bool selected,
-             path_continuation path_goes = I) {
+              path_continuation path_goes = I) {
     return choices[v.segment][v.layer][v.index][selected][path_goes];
 }
 
@@ -230,10 +244,10 @@ int findMaxScoringPaths(const eds_matrix &eds_segments,
                     Vertex p = getPredecessorVertex(eds_segments, a);
                     int score_p_0 = getScore(scores, p, !SELECTED);
                     int score_p_1 = getScore(scores, p, SELECTED);
-                    setScoreAndChoice(
-                        scores, choices,
-                        max_score(weight_a + score_p_0 - penalty, weight_a + score_p_1),
-                        a, SELECTED);
+                    setScoreAndChoice(scores, choices,
+                                      max_score(weight_a + score_p_0 - penalty,
+                                                weight_a + score_p_1),
+                                      a, SELECTED);
 
                     // W(a, 0) = max{W(p, 0), W(a, 1)}
                     setScoreAndChoice(
@@ -373,7 +387,7 @@ int findMaxScoringPaths(const eds_matrix &eds_segments,
                 }
                 // J vertex.
                 else if (isJVertex(a, eds_segments)) {
-                    // W(a, 1) = max{
+                    // W(a, 1) = w(a) + max{
                     //      W(p1, 0, I) + W(p2, 0, E) +...+ W(pb, 0, E) - x,
                     //                         ...
                     //______W(p1, 0, E) + W(p2, 0, E) +...+ W(pb, 0, I) - x,
@@ -385,7 +399,7 @@ int findMaxScoringPaths(const eds_matrix &eds_segments,
                     //                         ...
                     //      W(p1, 0, E) + W(p2, 0, E) +...+ W(pb, 1, I) }
                     // where b is the number of layers in the current bubble.
-                    int num_preds = eds_segments[segment].size();
+                    int num_preds = eds_segments[segment - 1].size();
                     // Get all predecessors.
                     vector<Vertex> a_preds(num_preds);
                     for (int i = 0; i < num_preds; i++) {
@@ -393,7 +407,7 @@ int findMaxScoringPaths(const eds_matrix &eds_segments,
                     }
                     // To avoid n^3 runtime complexity of W(a, 1), calculate a
                     // base score that is going to be modified:
-                    // W(p1, 0, E) +  W(p2, 0, E) + ... + W(pb, 0, E)
+                    // w(a) + W(p1, 0, E) +  W(p2, 0, E) + ... + W(pb, 0, E)
                     int base_score = 0;
                     for (const Vertex &p : a_preds) {
                         base_score += getScore(scores, p, !SELECTED, E);
@@ -476,9 +490,10 @@ int findMaxScoringPaths(const eds_matrix &eds_segments,
             }
         }
     }
-    return max(
-        {scores.back().back().back()[0][0], scores.back().back().back()[0][1],
-         scores.back().back().back()[1][0], scores.back().back().back()[1][1]});
+    return max({scores.back().back().back()[SELECTED][I],
+                scores.back().back().back()[SELECTED][E],
+                scores.back().back().back()[!SELECTED][I],
+                scores.back().back().back()[!SELECTED][E]});
 }
 
 vector<vector<Vertex>> getPaths(const eds_matrix &eds_segments,
@@ -486,14 +501,13 @@ vector<vector<Vertex>> getPaths(const eds_matrix &eds_segments,
     vector<vector<Vertex>> paths;
 
     Vertex a = getLastVertex(eds_segments);
+    int last_choice_SELECTED;
     vector<Vertex> path;
     while (hasPredecessorVertex(a)) {
         // N vertex.
         if (isNVertex(a, eds_segments)) {
-            
         }
     }
-
 
     // for (int segment = eds_segments.size() - 1; segment >= 0; segment--) {
     //     for (int layer = eds_segments[segment].size() - 1; layer >= 0;

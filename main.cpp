@@ -1,3 +1,5 @@
+//g++ -std=c++14 utility_func.cpp  main.cpp -o main -I/opt/homebrew/Cellar/boost/1.81.0_1/include -lm
+
 #include "utility_func.hpp"
 
 #include <boost/algorithm/string/trim.hpp>
@@ -11,36 +13,18 @@
 using namespace std;
 
 int main() {
-    string EDS = readEDSFile("test_input.txt");
-    // Remove leading and trailing white spaces.
+    string EDS = readEDSFile("input_04.txt");
+    // Remove leading and trailing white spaces. - unnecessary
     boost::trim(EDS);
     cout << EDS << endl;
 
-    vector<vector<string>> eds_segments = EDSToMatrix(EDS);
-    vector<vector<vector<int>>> weights = getGCContentWeights(eds_segments);
-
-    for (int i = 0; i < weights.size(); i++) {
-        for (int j = 0; j < weights[i].size(); j++) {
-            cout << eds_segments[i][j] << endl;
-            for (int k = 0; k < weights[i][j].size(); k++) {
-                cout << weights[i][j][k];
-            }
-            cout << endl;
-        }
-    }
+    eds_matrix eds_segments = EDSToMatrix(EDS);
+    weight_matrix weights = getGCContentWeights(eds_segments);
 
     score_matrix scores = initScoreMatrix(weights);
     score_matrix choices = initScoreMatrix(weights);
-    cout << scores.size() << endl;
-    // cout << scores[1].size() << endl;
-    // cout << scores[1][1].size() << endl;
-    // cout << scores[1][1][0].size() << endl;
-    // cout << scores[1][1][0][0].size() << endl;
 
-    int result = findMaxScoringPaths(eds_segments, weights, scores, choices, 10);
+    int result = findMaxScoringPaths(eds_segments, weights, scores, choices, 2);
     cout << "RESULT: " << result << endl;
-    cout << "Number of segments: " << getLastVertex(eds_segments).segment << endl;
-    cout << "Number of indices: " << getLastVertex(eds_segments).index << endl;
-    cout << "END" << endl;
     return 0;
 }

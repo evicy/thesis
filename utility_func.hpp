@@ -12,6 +12,9 @@ using namespace std;
 
 typedef vector<vector<string>> eds_matrix;
 
+// Empty strings used to create a bubble graph from EDS.
+#define EMPTY_STR '_'
+
 // Returns the one line elastic degenerate string file as a string.
 string readEDSFile(const string &file_path);
 
