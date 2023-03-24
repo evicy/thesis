@@ -91,4 +91,10 @@ int findMaxScoringPaths(const eds_matrix &eds_segments,
                          score_matrix &choices,
                          int penalty);
 
+
+vector<vector<Vertex>> getPaths(const eds_matrix &eds_segments,
+                                score_matrix &scores, score_matrix &choices);
+
+void printPaths(vector<vector<Vertex>> paths);
+
 #endif

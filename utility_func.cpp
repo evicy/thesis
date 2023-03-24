@@ -128,6 +128,10 @@ bool operator==(const Vertex &a, const Vertex &b) {
     return tie(a.segment, a.layer, a.index) == tie(b.segment, b.layer, b.index);
 }
 
+std::ostream &operator<<(std::ostream &os, Vertex const &v) { 
+    return os << "(" << v.segment << "," << v.layer << "," << v.index << ")";
+}
+
 // Helper functions for Vertex type.
 Vertex getLastVertex(const eds_matrix &eds_segments) {
     int last_segment = eds_segments.size() - 1;
@@ -538,12 +542,13 @@ vector<vector<Vertex>> getPaths(const eds_matrix &eds_segments,
         // Handle the full bubble, `a` is the start vertex of the bubble after
         // this code part.
         else if (isJVertex(a, eds_segments)) {
+            Vertex j = a;
             int choice = getChoice(choices, a, was_a_selected);
             // Get all predecessors.
             int num_preds = eds_segments[a.segment - 1].size();
-            vector<Vertex> a_preds(num_preds);
+            vector<Vertex> j_preds(num_preds);
             for (int layer = 0; layer < num_preds; layer++) {
-                a_preds[layer] = getPredecessorVertex(eds_segments, a, layer);
+                j_preds[layer] = getPredecessorVertex(eds_segments, a, layer);
             }
 
             // W(a, 1) = w(a) + max{
@@ -579,65 +584,114 @@ vector<vector<Vertex>> getPaths(const eds_matrix &eds_segments,
             // the predecessors.
             for (int layer = num_preds - 1; layer >= 0; layer--) {
                 vector<Vertex> layer_path;
-                Vertex p = a_preds[layer];
                 int path_cont_layer = rule_line == path_cont_layer ? I : E;
-                bool is_p_selected =
-                    getScore(scores, p, SELECTED, path_cont_layer) <
-                            getScore(scores, p, !SELECTED, path_cont_layer)
+                bool is_j_selected =
+                    getScore(scores, j_preds[layer], SELECTED,
+                             path_cont_layer) < getScore(scores, j_preds[layer],
+                                                         !SELECTED,
+                                                         path_cont_layer)
                         ? !SELECTED
                         : SELECTED;
 
-                if (is_p_selected) {
-                    layer_path.emplace_back(p);
+                if (is_j_selected) {
+                    layer_path.emplace_back(j_preds[layer]);
                 }
 
-                Vertex v = p;
-                bool is_v_selected = is_p_selected;
+                Vertex v = j_preds[layer];
+                bool is_v_selected = is_j_selected;
                 while (isLayerVertex(v, eds_segments)) {
                     int choice_v =
                         getChoice(choices, v, is_v_selected, path_cont_layer);
-                    // 1_first layer.
-                    // This is the last layer that is being processed.
+                    Vertex v_pred = getPredecessorVertex(eds_segments, v);
+                    
+                    // 1_first vertex: this is the last and vertex to be
+                    // processed in the J vertex block.
                     if (isFirstLayerVertex(v, eds_segments) &&
                         isVertexFirstOnLayer(v, eds_segments)) {
                         assert(layer == 0);
 
                         // Set `a` to point to the start vertex of the bubble;
-                        a = getPredecessorVertex(eds_segments, v);
-                        v = a;
+                        a = v_pred;
                         if (path_cont_layer == I) {
                             was_a_selected =
                                 choice_v == FIRST ? !SELECTED : SELECTED;
                         } else {
                             was_a_selected = SELECTED;
                         }
+                    }
 
-                        if (path_cont_layer == I && was_a_selected) {
-                            layer_path.emplace_back(v);
+                    // First vertex on any layer.
+                    if (isVertexFirstOnLayer(v, eds_segments)) {
+                        if (path_cont_layer == I &&
+                            ((isFirstLayerVertex(v, eds_segments) &&
+                              was_a_selected) ||
+                             !isFirstLayerVertex(v, eds_segments))) {
+                            layer_path.emplace_back(v_pred);
                             if (!current_path.empty()) {
                                 // Maybe `layer_path` should continue
                                 // `current_path`. If the bubble's end vertex's
                                 // (the processed J vertex's) predecessor
-                                if (is_p_selected && layer_path[0] == p) {
+                                if (current_path.back() == j &&
+                                    layer_path[0] == j_preds[layer]) {
                                     current_path.insert(current_path.end(),
                                                         layer_path.begin(),
                                                         layer_path.end());
+                                } else {
+                                    paths.emplace_back(current_path);
+                                    current_path = layer_path;
                                 }
-                                else {
+                            } else {
+                                current_path = layer_path;
+                            }
+                        } else if (!layer_path.empty()) {
+                            paths.emplace_back(layer_path);
+                            layer_path.clear();
+                        }
+                        v = v_pred;
+                    }
+                    // Later vertex on any layer.
+                    else {
+                        if (choice == FIRST) {
+                            is_v_selected = !SELECTED;
+                            if (!layer_path.empty()) {
+                                // Try to continue current_path if possible.
+                                if (!current_path.empty() &&
+                                    current_path.back() == j &&
+                                    layer_path[0] == j_preds[layer]) {
+                                    current_path.insert(current_path.end(),
+                                                        layer_path.begin(),
+                                                        layer_path.end());
                                     paths.emplace_back(current_path);
                                     current_path.clear();
+                                } else {
+                                    paths.emplace_back(layer_path);
+                                    layer_path.clear();
                                 }
                             }
-                            current_path = layer_path;
                         } else {
-                            if (!layer_path.empty()) {
-                                paths.emplace_back(layer_path);
-                            }
+                            layer_path.emplace_back(v_pred);
+                            is_v_selected = SELECTED;
                         }
+                        v = v_pred;
                     }
                 }
             }
+        } 
+        else {
+            assert(false);
         }
     }
+    if (!current_path.empty()) {
+        paths.emplace_back(current_path);
+    }
     return paths;
+}
+
+void printPaths(vector<vector<Vertex>> paths) {
+    for (const auto &path : paths) {
+        for (const auto &vertex : path) {
+            cout << vertex; 
+        }
+        cout << endl;
+    }
 }
