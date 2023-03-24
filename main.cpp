@@ -47,7 +47,7 @@ void printChoices(const score_matrix &choices) {
 }
 
 int main() {
-    string EDS = readEDSFile("input_02.txt");
+    string EDS = readEDSFile("input_01.txt");
     // Remove leading and trailing white spaces. - unnecessary
     boost::trim(EDS);
     cout << EDS << endl;

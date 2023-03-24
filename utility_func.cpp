@@ -515,7 +515,6 @@ vector<vector<Vertex>> getPaths(const eds_matrix &eds_segments,
     // value 0. Therefore, it is unnecessary to select it.
     Vertex a = getLastVertex(eds_segments);
     bool was_a_selected = !SELECTED;
-    int path_continuation = -1;
     vector<Vertex> current_path;
     while (hasPredecessorVertex(a)) {
         // N vertex.
