@@ -9,10 +9,6 @@
 
 using namespace std;
 
-// Returns the one line elastic-degenerate string file as a string.
-// Adds a letter N to the start and also to the end of the string to make sure
-// the elastic-degenerate string equals with the n-layered bubble graph
-// definition. These two letters should get score 0.
 string readEDSFile(const string &file_path) {
     ifstream input_stream(file_path);
 
@@ -28,8 +24,6 @@ string readEDSFile(const string &file_path) {
            EMPTY_STR;
 }
 
-// Store the elastic degenerate string `text` in a 2D matrix.
-// eds_matrix[s][l]
 eds_matrix EDSToMatrix(const string &EDS) {
     eds_matrix eds_segments;
     vector<string> current_segment;
@@ -44,7 +38,8 @@ eds_matrix EDSToMatrix(const string &EDS) {
             assert(in_nondet_segment || c != ',');
 
             if (c == ',') {
-                // Empty layers are are denoted by a vertex with value "_".
+                // Empty layers are are denoted by a vertex with value
+                // `EMPTY_STR`.
                 if (current_string.empty()) {
                     current_string += EMPTY_STR;
                 }
@@ -58,8 +53,8 @@ eds_matrix EDSToMatrix(const string &EDS) {
         else if (c == '{') {
             assert(!in_nondet_segment && current_segment.empty());
             in_nondet_segment = true;
-            // Starts after another non-deterministic
-            // segment: separate them with with an empty deterministic segment.
+            // Starts after another non-deterministic segment: separate them
+            // with with an empty deterministic segment.
             if (i > 0 && EDS[i - 1] == '}') {
                 eds_segments.emplace_back(vector<string>{string(1, EMPTY_STR)});
             }
@@ -72,7 +67,7 @@ eds_matrix EDSToMatrix(const string &EDS) {
         // End of a segment.
         else {
             assert(c == '}' && in_nondet_segment && !current_segment.empty());
-            // Empty layers are are denoted by a vertex with value "_".
+            // Empty layers are are denoted by a vertex with value `EMPTY_STR`.
             if (current_string.empty()) {
                 current_string += EMPTY_STR;
             }
@@ -94,10 +89,6 @@ eds_matrix EDSToMatrix(const string &EDS) {
     return eds_segments;
 }
 
-// Assign score based on GC content:
-// - bases G and C get score 1
-// - empty non-deterministic segment parts get score 0
-// - every other character gets score 0.
 vector<vector<vector<int>>> getGCContentWeights(const eds_matrix &eds_segments,
                                                 int match, int non_match) {
     vector<vector<vector<int>>> weights;
@@ -108,6 +99,7 @@ vector<vector<vector<int>>> getGCContentWeights(const eds_matrix &eds_segments,
         for (const auto &str : segment) {
             vector<int> w_str(str.size(), 0);
             for (int i = 0; i < str.size(); i++) {
+                // The `EMPTY_STR` has no biological significance.
                 if (str[i] == EMPTY_STR) {
                     w_str[i] = 0;
                 } else {
@@ -122,21 +114,16 @@ vector<vector<vector<int>>> getGCContentWeights(const eds_matrix &eds_segments,
     return weights;
 }
 
-// Find maximum-scoring paths.
-
 bool operator==(const Vertex &a, const Vertex &b) {
     return tie(a.segment, a.layer, a.index) == tie(b.segment, b.layer, b.index);
 }
 
-bool operator!=(const Vertex &a, const Vertex &b) {
-    return !(a==b);
-}
+bool operator!=(const Vertex &a, const Vertex &b) { return !(a == b); }
 
 std::ostream &operator<<(std::ostream &os, Vertex const &v) {
     return os << "(" << v.segment << "," << v.layer << "," << v.index << ")";
 }
 
-// Helper functions for Vertex type.
 Vertex getLastVertex(const eds_matrix &eds_segments) {
     int last_segment = eds_segments.size() - 1;
     int last_index = eds_segments[last_segment][0].size() - 1;
@@ -170,7 +157,7 @@ bool hasPredecessorVertex(Vertex v) {
 }
 
 Vertex getPredecessorVertex(const eds_matrix &eds_segments, Vertex v,
-                            int predecessor_layer = 0) {
+                            int predecessor_layer) {
     assert(hasPredecessorVertex(v));
     if (v.index != 0) {
         return {v.segment, v.layer, v.index - 1};
@@ -180,14 +167,14 @@ Vertex getPredecessorVertex(const eds_matrix &eds_segments, Vertex v,
                 eds_segments[v.segment - 1][predecessor_layer].size() - 1)};
 }
 
-int getScore(score_matrix &scores, Vertex v, bool selected,
-             path_continuation path_goes = I) {
-    return scores[v.segment][v.layer][v.index][selected][path_goes];
+int getScore(score_matrix &scores, Vertex v, bool surely_selected,
+             path_continuation path_goes) {
+    return scores[v.segment][v.layer][v.index][surely_selected][path_goes];
 }
 
-int getChoice(score_matrix &choices, Vertex v, bool selected,
-              path_continuation path_goes = I) {
-    return choices[v.segment][v.layer][v.index][selected][path_goes];
+int getChoice(score_matrix &choices, Vertex v, bool surely_selected,
+              path_continuation path_goes) {
+    return choices[v.segment][v.layer][v.index][surely_selected][path_goes];
 }
 
 int getWeight(const weight_matrix &weights, Vertex v) {
@@ -207,7 +194,7 @@ void setScoreAndChoice(score_matrix &scores, score_matrix &choices,
 }
 
 // vector<vector<vector<vector<vector<int>>>>>
-// [segment][layer][index][{SELECTED, !SELECTED}][I, E]
+// [segment][layer][index][{SURELY_SELECTED, !SURELY_SELECTED}][I, E]
 score_matrix initScoreMatrix(const weight_matrix &weights) {
     score_matrix scores;
     scores.resize(weights.size());
@@ -217,7 +204,9 @@ score_matrix initScoreMatrix(const weight_matrix &weights) {
             scores[segment][layer].resize(weights[segment][layer].size());
             for (int index = 0; index < weights[segment][layer].size();
                  index++) {
+                // Dimension of size 2 for (!)SURELY_SELECTED.
                 scores[segment][layer][index].resize(2);
+                // Dimension of size 2 for path continuation I or E.
                 scores[segment][layer][index][0].resize(2);
                 scores[segment][layer][index][1].resize(2);
             }
@@ -241,98 +230,105 @@ int findMaxScoringPaths(const eds_matrix &eds_segments,
                     // W(a, 1) = w(a) - x
                     int score_a_1 = weight_a - penalty;
                     setScoreAndChoice(scores, choices,
-                                      make_pair(score_a_1, FIRST), a, SELECTED);
+                                      make_pair(score_a_1, FIRST), a,
+                                      SURELY_SELECTED);
+
                     // W(a, 0) = max{0, W(a, 1)}
                     setScoreAndChoice(scores, choices, max_score(0, score_a_1),
-                                      a, !SELECTED);
+                                      a, !SURELY_SELECTED);
                 }
                 // N vertex.
                 else if (isNVertex(a, eds_segments)) {
                     assert(layer == 0);
                     // W(a, 1) = w(a) + max{W(p, 0) - x, W(p, 1)}
                     Vertex p = getPredecessorVertex(eds_segments, a);
-                    int score_p_0 = getScore(scores, p, !SELECTED);
-                    int score_p_1 = getScore(scores, p, SELECTED);
+                    int score_p_0 = getScore(scores, p, !SURELY_SELECTED);
+                    int score_p_1 = getScore(scores, p, SURELY_SELECTED);
                     setScoreAndChoice(scores, choices,
                                       max_score(weight_a + score_p_0 - penalty,
                                                 weight_a + score_p_1),
-                                      a, SELECTED);
+                                      a, SURELY_SELECTED);
 
                     // W(a, 0) = max{W(p, 0), W(a, 1)}
                     setScoreAndChoice(
                         scores, choices,
-                        max_score(score_p_0, getScore(scores, a, SELECTED)), a,
-                        !SELECTED);
+                        max_score(score_p_0,
+                                  getScore(scores, a, SURELY_SELECTED)),
+                        a, !SURELY_SELECTED);
                 }
                 // 1st (lowest) layer vertex.
                 else if (isFirstLayerVertex(a, eds_segments)) {
                     // 1_first vertex.
                     if (isVertexFirstOnLayer(a, eds_segments)) {
                         Vertex p = getPredecessorVertex(eds_segments, a);
-                        int score_p_0 = getScore(scores, p, !SELECTED);
-                        int score_p_1 = getScore(scores, p, SELECTED);
+                        int score_p_0 = getScore(scores, p, !SURELY_SELECTED);
+                        int score_p_1 = getScore(scores, p, SURELY_SELECTED);
                         // W(a, 1, I) = w(a) + max{W(p, 0) - x, W(p, 1)}
                         setScoreAndChoice(
                             scores, choices,
                             max_score(weight_a + score_p_0 - penalty,
                                       weight_a + score_p_1),
-                            a, SELECTED, I);
+                            a, SURELY_SELECTED, I);
 
                         // W(a, 0, I) = max{W(p, 0), W(a, 1, I)}
                         setScoreAndChoice(
                             scores, choices,
                             max_score(score_p_0,
-                                      getScore(scores, a, SELECTED, I)),
-                            a, !SELECTED, I);
+                                      getScore(scores, a, SURELY_SELECTED, I)),
+                            a, !SURELY_SELECTED, I);
 
                         // W(a, 1, E) = w(a) + W(p, 1) - x
                         int score_a_1_E = weight_a + score_p_1 - penalty;
                         setScoreAndChoice(scores, choices,
                                           make_pair(score_a_1_E, FIRST), a,
-                                          SELECTED, E);
+                                          SURELY_SELECTED, E);
 
                         // W(a, 0, E) = max{W(p, 1), W(a, 1, E)}
                         setScoreAndChoice(scores, choices,
                                           max_score(score_p_1, score_a_1_E), a,
-                                          !SELECTED, E);
+                                          !SURELY_SELECTED, E);
                     }
                     // 1_later vertex.
                     else {
                         Vertex p = getPredecessorVertex(eds_segments, a);
-                        int score_p_0_I = getScore(scores, p, !SELECTED, I);
-                        int score_p_1_I = getScore(scores, p, SELECTED, I);
+                        int score_p_0_I =
+                            getScore(scores, p, !SURELY_SELECTED, I);
+                        int score_p_1_I =
+                            getScore(scores, p, SURELY_SELECTED, I);
                         // W(a, 1, I) = w(a) + max{W(p, 0, I) - x, W(p, 1, I)}
                         setScoreAndChoice(
                             scores, choices,
                             max_score(weight_a + score_p_0_I - penalty,
                                       weight_a + score_p_1_I),
-                            a, SELECTED, I);
+                            a, SURELY_SELECTED, I);
 
                         // W(a, 0, I) = max{W(p, 0, I), W(a, 1, I)}
                         setScoreAndChoice(
                             scores, choices,
                             max_score(score_p_0_I,
-                                      getScore(scores, a, SELECTED, I)),
-                            a, !SELECTED, I);
+                                      getScore(scores, a, SURELY_SELECTED, I)),
+                            a, !SURELY_SELECTED, I);
 
                         // W(a, 1, E) = w(a) + max{W(p, 0, E) - x, W(p, 1, E)}
-                        int score_p_0_E = getScore(scores, p, !SELECTED, E);
-                        int score_p_1_E = getScore(scores, p, SELECTED, E);
+                        int score_p_0_E =
+                            getScore(scores, p, !SURELY_SELECTED, E);
+                        int score_p_1_E =
+                            getScore(scores, p, SURELY_SELECTED, E);
                         setScoreAndChoice(
                             scores, choices,
                             max_score(weight_a + score_p_0_E - penalty,
                                       weight_a + score_p_1_E),
-                            a, SELECTED, E);
+                            a, SURELY_SELECTED, E);
 
                         // W(a, 0, E) = max{W(p, 0, E), W(a, 1, E)}
                         setScoreAndChoice(
                             scores, choices,
                             max_score(score_p_0_E,
-                                      getScore(scores, a, SELECTED, E)),
-                            a, !SELECTED, E);
+                                      getScore(scores, a, SURELY_SELECTED, E)),
+                            a, !SURELY_SELECTED, E);
                     }
                 }
-                // L in {2, ..., n} vertex.
+                // L in {2, ..., n} layer vertex.
                 else if (isLayerVertex(a, eds_segments)) {
                     // L_first vertex.
                     if (isVertexFirstOnLayer(a, eds_segments)) {
@@ -340,58 +336,62 @@ int findMaxScoringPaths(const eds_matrix &eds_segments,
                         int score_a_1_I = weight_a;
                         setScoreAndChoice(scores, choices,
                                           make_pair(score_a_1_I, FIRST), a,
-                                          SELECTED, I);
+                                          SURELY_SELECTED, I);
 
                         // W(a, 0, I) = W(a, 1, I)
                         setScoreAndChoice(scores, choices,
                                           make_pair(score_a_1_I, FIRST), a,
-                                          !SELECTED, I);
+                                          !SURELY_SELECTED, I);
 
                         // W(a, 1, E) = w(a) - x
                         int score_a_1_E = weight_a - penalty;
                         setScoreAndChoice(scores, choices,
                                           make_pair(score_a_1_E, FIRST), a,
-                                          SELECTED, E);
+                                          SURELY_SELECTED, E);
 
                         // W(a, 0, E) = max{0, W(a, 1, E)}
                         setScoreAndChoice(scores, choices,
                                           max_score(0, score_a_1_E), a,
-                                          !SELECTED, E);
+                                          !SURELY_SELECTED, E);
                     }
                     // L_later vertex.
                     else {
                         Vertex p = getPredecessorVertex(eds_segments, a);
-                        int score_p_0_I = getScore(scores, p, !SELECTED, I);
-                        int score_p_1_I = getScore(scores, p, SELECTED, I);
+                        int score_p_0_I =
+                            getScore(scores, p, !SURELY_SELECTED, I);
+                        int score_p_1_I =
+                            getScore(scores, p, SURELY_SELECTED, I);
                         // W(a, 1, I) = w(a) + max{W(p, 0, I) - x, W(p, 1, I)}
                         setScoreAndChoice(
                             scores, choices,
                             max_score(weight_a + score_p_0_I - penalty,
                                       weight_a + score_p_1_I),
-                            a, SELECTED, I);
+                            a, SURELY_SELECTED, I);
 
                         // W(a, 0, I) = max{W(p, 0, I), W(a, 1, I)}
                         setScoreAndChoice(
                             scores, choices,
                             max_score(score_p_0_I,
-                                      getScore(scores, a, SELECTED, I)),
-                            a, !SELECTED, I);
+                                      getScore(scores, a, SURELY_SELECTED, I)),
+                            a, !SURELY_SELECTED, I);
 
                         // W(a, 1, E) = w(a) + max{W(p, 0, E) - x, W(p, 1, E)}
-                        int score_p_0_E = getScore(scores, p, !SELECTED, E);
-                        int score_p_1_E = getScore(scores, p, SELECTED, E);
+                        int score_p_0_E =
+                            getScore(scores, p, !SURELY_SELECTED, E);
+                        int score_p_1_E =
+                            getScore(scores, p, SURELY_SELECTED, E);
                         setScoreAndChoice(
                             scores, choices,
                             max_score(weight_a + score_p_0_E - penalty,
                                       weight_a + score_p_1_E),
-                            a, SELECTED, E);
+                            a, SURELY_SELECTED, E);
 
                         // W(a, 0, E) = max{W(p, 0, E), W(a, 1, E)}
                         setScoreAndChoice(
                             scores, choices,
                             max_score(score_p_0_E,
-                                      getScore(scores, a, SELECTED, E)),
-                            a, !SELECTED, E);
+                                      getScore(scores, a, SURELY_SELECTED, E)),
+                            a, !SURELY_SELECTED, E);
                     }
                 }
                 // J vertex.
@@ -419,18 +419,19 @@ int findMaxScoringPaths(const eds_matrix &eds_segments,
                     // w(a) + W(p1, 0, E) +  W(p2, 0, E) + ... + W(pb, 0, E)
                     int base_score = 0;
                     for (const Vertex &p : a_preds) {
-                        base_score += getScore(scores, p, !SELECTED, E);
+                        base_score += getScore(scores, p, !SURELY_SELECTED, E);
                     }
                     // Choose max sum for W(a, 1) based on the rules.
                     // 1st group in max:
                     int choice_a_1 = -1;
                     int score_a_1 = INT_MIN;
                     for (int path_I = 0; path_I < num_preds; path_I++) {
-                        int current_score =
-                            base_score -
-                            getScore(scores, a_preds[path_I], !SELECTED, E) +
-                            getScore(scores, a_preds[path_I], !SELECTED, I) -
-                            penalty;
+                        int current_score = base_score -
+                                            getScore(scores, a_preds[path_I],
+                                                     !SURELY_SELECTED, E) +
+                                            getScore(scores, a_preds[path_I],
+                                                     !SURELY_SELECTED, I) -
+                                            penalty;
                         if (score_a_1 < current_score) {
                             score_a_1 = current_score;
                             choice_a_1 = path_I;
@@ -441,20 +442,22 @@ int findMaxScoringPaths(const eds_matrix &eds_segments,
                          selected_pred++) {
                         int temp_base_score =
                             base_score -
-                            getScore(scores, a_preds[selected_pred], !SELECTED,
-                                     E) +
-                            getScore(scores, a_preds[selected_pred], SELECTED,
-                                     E);
+                            getScore(scores, a_preds[selected_pred],
+                                     !SURELY_SELECTED, E) +
+                            getScore(scores, a_preds[selected_pred],
+                                     SURELY_SELECTED, E);
                         for (int path_I = 0; path_I < num_preds; path_I++) {
                             int current_score =
                                 temp_base_score -
                                 getScore(scores, a_preds[path_I],
-                                         selected_pred == path_I ? SELECTED
-                                                                 : !SELECTED,
+                                         selected_pred == path_I
+                                             ? SURELY_SELECTED
+                                             : !SURELY_SELECTED,
                                          E) +
                                 getScore(scores, a_preds[path_I],
-                                         selected_pred == path_I ? SELECTED
-                                                                 : !SELECTED,
+                                         selected_pred == path_I
+                                             ? SURELY_SELECTED
+                                             : !SURELY_SELECTED,
                                          I);
                             if (score_a_1 < current_score) {
                                 score_a_1 = current_score;
@@ -466,7 +469,7 @@ int findMaxScoringPaths(const eds_matrix &eds_segments,
                     setScoreAndChoice(
                         scores, choices,
                         make_pair(weight_a + score_a_1, choice_a_1), a,
-                        SELECTED);
+                        SURELY_SELECTED);
 
                     // W(a, 0) = max{
                     //      W(p1, 0, I) + W(p2, 0, E) +...+ W(pb, 0, E),
@@ -477,10 +480,11 @@ int findMaxScoringPaths(const eds_matrix &eds_segments,
                     int score_a_0 = INT_MIN;
                     int choice_a_0 = 0;
                     for (int path_I = 0; path_I < num_preds; path_I++) {
-                        int current_score =
-                            base_score -
-                            getScore(scores, a_preds[path_I], !SELECTED, E) +
-                            getScore(scores, a_preds[path_I], !SELECTED, I);
+                        int current_score = base_score -
+                                            getScore(scores, a_preds[path_I],
+                                                     !SURELY_SELECTED, E) +
+                                            getScore(scores, a_preds[path_I],
+                                                     !SURELY_SELECTED, I);
                         if (score_a_0 < current_score) {
                             score_a_0 = current_score;
                             choice_a_0 = path_I;
@@ -496,7 +500,7 @@ int findMaxScoringPaths(const eds_matrix &eds_segments,
                     }
                     setScoreAndChoice(scores, choices,
                                       make_pair(score_a_0, choice_a_0), a,
-                                      !SELECTED);
+                                      !SURELY_SELECTED);
                 } else {
                     assert(false);
                 }
@@ -504,22 +508,25 @@ int findMaxScoringPaths(const eds_matrix &eds_segments,
         }
     }
 
-    // Get the max score from the last vertex of the graph. The last vertex has
-    // value 0, therefore, it is unnecessary to select it
+    // Get the max score from the last vertex of the graph. The last vertex is
+    // an `EMPTY_STR`, i.e. it has weight 0, therefore, it is unnecessary to
+    // select it.
     Vertex last = getLastVertex(eds_segments);
     assert(isNVertex(last, eds_segments) || isJVertex(last, eds_segments));
     const auto &last_data = scores[last.segment][last.layer][last.index];
-    return max(last_data[!SELECTED][I], last_data[!SELECTED][E]);
+    return max(last_data[!SURELY_SELECTED][I], last_data[!SURELY_SELECTED][E]);
 }
 
+// Helper function for `getPaths`. Merges and clears the `layer_path` into
+// `current_path` if possible.
 bool mergeLayerPathIntoCurrentPath(vector<Vertex> &current_path,
                                    vector<Vertex> &layer_path, const Vertex &j,
                                    const Vertex &j_pred,
                                    int surely_selected_j_p_layer) {
-    if (surely_selected_j_p_layer == -1 ||
-        surely_selected_j_p_layer != j_pred.layer || current_path.empty() ||
-        layer_path.empty() || current_path.back() != j ||
-        layer_path[0] != j_pred) {
+    if ((surely_selected_j_p_layer != -1 &&
+         surely_selected_j_p_layer != j_pred.layer) ||
+        current_path.empty() || layer_path.empty() ||
+        current_path.back() != j || layer_path[0] != j_pred) {
         return false;
     }
     current_path.insert(current_path.end(), layer_path.begin(),
@@ -532,7 +539,7 @@ vector<vector<Vertex>> getPaths(const eds_matrix &eds_segments,
                                 score_matrix &scores, score_matrix &choices) {
     vector<vector<Vertex>> paths;
     // The last vertex was synthetically added to the pangenome-graph and has
-    // value 0. Therefore, it is unnecessary to select it.
+    // weight 0. Therefore, it is not necessary to select it
     Vertex a = getLastVertex(eds_segments);
     bool is_a_surely_selected = false;
     vector<Vertex> current_path;
@@ -541,10 +548,9 @@ vector<vector<Vertex>> getPaths(const eds_matrix &eds_segments,
         if (isNVertex(a, eds_segments)) {
             // W(a, 1) = w(a) + max{W(p, 0) - x, W(p, 1)}
             // W(a, 0) = max{W(p, 0), W(a, 1)}
-            // Regardless whether `a` was selected: the first choice corresponds
-            // to not selecting the previos vertex `p`.
-            int choice = getChoice(choices, a,
-                                   is_a_surely_selected ? SELECTED : !SELECTED);
+            int choice = getChoice(
+                choices, a,
+                is_a_surely_selected ? SURELY_SELECTED : !SURELY_SELECTED);
             // Vertex `a` is selected if W(a, 1) or W(a, 0) = W(a, 1).
             if (is_a_surely_selected || choice == SECOND) {
                 current_path.emplace_back(a);
@@ -554,7 +560,8 @@ vector<vector<Vertex>> getPaths(const eds_matrix &eds_segments,
                     if (choice == FIRST) {
                         is_a_surely_selected = false;
                     } else {
-                        int choice_a_1 = getChoice(choices, a, !SELECTED);
+                        int choice_a_1 =
+                            getChoice(choices, a, !SURELY_SELECTED);
                         is_a_surely_selected = choice == SECOND ? true : false;
                     }
                 }
@@ -600,9 +607,10 @@ vector<vector<Vertex>> getPaths(const eds_matrix &eds_segments,
             //      W(a, 1)
             // where b is the number of layers in the current bubble.
 
-            int choice = getChoice(choices, j,
-                                   is_a_surely_selected ? SELECTED : !SELECTED);
-            
+            int choice = getChoice(
+                choices, j,
+                is_a_surely_selected ? SURELY_SELECTED : !SURELY_SELECTED);
+
             // Select J vertex if W(a, 1) or W(a, 0) = W(a, 1).
             if (is_a_surely_selected || choice == num_preds) {
                 current_path.emplace_back(a);
@@ -620,19 +628,15 @@ vector<vector<Vertex>> getPaths(const eds_matrix &eds_segments,
             int rule_line = choice % num_preds;
             // Based on the rule group (every `num_preds` lines), we can get
             // which predecessor of `j` has to be surely selected. If W(a, 0) ==
-            // W(a, 1), check the W(a, 1) rule group.
+            // W(a, 1), the choice stores which W(a, 1) rule was chosen. This
+            // chosen rule is "moved by" a rule group.
             int surely_selected_j_p_layer = -1;
             if (choice >= num_preds) {
+                int rule_group = choice / num_preds;
                 if (is_a_surely_selected) {
-                    int rule_group = choice / num_preds;
                     surely_selected_j_p_layer = rule_group - 1;
-                } 
-                else {
-                    int choice_a_1 = getChoice(choices, j, SELECTED);
-                    int rule_group = choice_a_1 / num_preds;
-                    if (rule_group > 0) {
-                        surely_selected_j_p_layer = rule_group - 1;
-                    }
+                } else if (rule_group >= 2) {
+                    surely_selected_j_p_layer = rule_group - 2;
                 }
             }
 
@@ -649,11 +653,12 @@ vector<vector<Vertex>> getPaths(const eds_matrix &eds_segments,
                 a = j_preds[layer];
                 while (isLayerVertex(a, eds_segments)) {
                     choice = getChoice(choices, a, is_a_surely_selected,
-                                             path_cont_layer);
+                                       path_cont_layer);
 
                     // 1_first vertex: this is the last and vertex to be
                     // processed in this J vertex code-block.
-                    // Deals with wehther the start vertex of the bubble is selected.
+                    // Deals with wehther the start vertex of the bubble is
+                    // surely selected.
                     if (isFirstLayerVertex(a, eds_segments) &&
                         isVertexFirstOnLayer(a, eds_segments)) {
                         assert(layer == 0);
@@ -664,7 +669,8 @@ vector<vector<Vertex>> getPaths(const eds_matrix &eds_segments,
                                 layer_path.emplace_back(a);
                                 if (!mergeLayerPathIntoCurrentPath(
                                         current_path, layer_path, j,
-                                        j_preds[layer], surely_selected_j_p_layer)) {
+                                        j_preds[layer],
+                                        surely_selected_j_p_layer)) {
                                     if (!current_path.empty()) {
                                         paths.emplace_back(current_path);
                                         current_path = layer_path;
@@ -675,7 +681,8 @@ vector<vector<Vertex>> getPaths(const eds_matrix &eds_segments,
                             else {
                                 if (mergeLayerPathIntoCurrentPath(
                                         current_path, layer_path, j,
-                                        j_preds[layer], surely_selected_j_p_layer)) {
+                                        j_preds[layer],
+                                        surely_selected_j_p_layer)) {
                                     paths.emplace_back(current_path);
                                 } else {
                                     if (!current_path.empty()) {
@@ -693,9 +700,9 @@ vector<vector<Vertex>> getPaths(const eds_matrix &eds_segments,
                         }
                         // Path continues on different layer.
                         else {
-                            if (mergeLayerPathIntoCurrentPath(current_path,
-                                                              layer_path, j,
-                                                              j_preds[layer], surely_selected_j_p_layer)) {
+                            if (mergeLayerPathIntoCurrentPath(
+                                    current_path, layer_path, j, j_preds[layer],
+                                    surely_selected_j_p_layer)) {
                                 paths.emplace_back(current_path);
                             } else {
                                 if (!current_path.empty()) {
@@ -716,9 +723,9 @@ vector<vector<Vertex>> getPaths(const eds_matrix &eds_segments,
                         if (path_cont_layer == I) {
                             // Vertex `a` is surely selected.
                             layer_path.emplace_back(a);
-                            if (mergeLayerPathIntoCurrentPath(current_path,
-                                                              layer_path, j,
-                                                              j_preds[layer], surely_selected_j_p_layer)) {
+                            if (mergeLayerPathIntoCurrentPath(
+                                    current_path, layer_path, j, j_preds[layer],
+                                    surely_selected_j_p_layer)) {
                                 after_bubble_current_path = current_path;
                                 current_path.clear();
                             } else {
@@ -726,16 +733,16 @@ vector<vector<Vertex>> getPaths(const eds_matrix &eds_segments,
                                 layer_path.clear();
                             }
                         } else {
-                            if(is_a_surely_selected || choice == SECOND) {
+                            if (is_a_surely_selected || choice == SECOND) {
                                 layer_path.emplace_back(a);
                             }
-                            if (mergeLayerPathIntoCurrentPath(current_path,
-                                                              layer_path, j,
-                                                              j_preds[layer], surely_selected_j_p_layer)) {
+                            if (mergeLayerPathIntoCurrentPath(
+                                    current_path, layer_path, j, j_preds[layer],
+                                    surely_selected_j_p_layer)) {
                                 paths.emplace_back(current_path);
                                 current_path.clear();
                                 layer_path.clear();
-                            } else if (!layer_path.empty()){
+                            } else if (!layer_path.empty()) {
                                 paths.emplace_back(layer_path);
                                 layer_path.clear();
                             }
@@ -743,7 +750,8 @@ vector<vector<Vertex>> getPaths(const eds_matrix &eds_segments,
                     }
                     // Later vertex on any layer.
                     else {
-                        // Vertex `a` is selected if W(a, 1, _) or W(a, 1, _) is max.
+                        // Vertex `a` is selected if W(a, 1, _) or W(a, 1, _) is
+                        // max.
                         if (is_a_surely_selected || choice == SECOND) {
                             layer_path.emplace_back(a);
                             if (is_a_surely_selected) {
@@ -754,20 +762,22 @@ vector<vector<Vertex>> getPaths(const eds_matrix &eds_segments,
                                     is_a_surely_selected = false;
                                 } else {
                                     int choice_a_1 =
-                                        getChoice(choices, a, !SELECTED);
+                                        getChoice(choices, a, !SURELY_SELECTED);
                                     is_a_surely_selected =
                                         choice == SECOND ? true : false;
                                 }
                             }
                         }
-                        // Vertex `a` is not selected if W(a, 0, _) = W(p, 0, _).
+                        // Vertex `a` is not selected if W(a, 0, _) = W(p, 0,
+                        // _).
                         else {
                             is_a_surely_selected = false;
-                            if (mergeLayerPathIntoCurrentPath(current_path, layer_path, j, j_preds[layer], surely_selected_j_p_layer)) {
+                            if (mergeLayerPathIntoCurrentPath(
+                                    current_path, layer_path, j, j_preds[layer],
+                                    surely_selected_j_p_layer)) {
                                 paths.emplace_back(current_path);
                                 current_path.clear();
-                            }
-                            else if (!layer_path.empty()) {
+                            } else if (!layer_path.empty()) {
                                 paths.emplace_back(layer_path);
                                 layer_path.clear();
                             }

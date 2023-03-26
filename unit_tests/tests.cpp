@@ -1,6 +1,7 @@
 // TODO: Do this with a test module (Gtest, boost test)
 
 #include "../utility_func.hpp"
+#include <iostream>
 
 using namespace std;
 
