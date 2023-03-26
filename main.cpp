@@ -8,7 +8,7 @@
 using namespace std;
 
 int main(int argc, char* argv[]) {
-    string EDS = readEDSFile(argc > 1 ? argv[1] : "input_01.txt");
+    string EDS = readEDSFile(argc > 1 ? argv[1] : "../input_01.txt");
 
     eds_matrix eds_segments = EDSToMatrix(EDS);
     weight_matrix weights = getGCContentWeights(eds_segments);

@@ -81,13 +81,13 @@ bool operator!=(const Vertex &a, const Vertex &b);
 // Index `SURELY_SELECTED = 1` corresponds to the score when the vertex is
 // selected. Its negation `!SURELY_SELECTED = 0` index contains the maximum
 // score of selecting or not selecting the vertex.
-#define SURELY_SELECTED true
+const bool SURELY_SELECTED = true;
 // The path from the start vertex of a bubble can continue on different layers.
 // For each layer vertex the path continuation on its, I(dentical), layer or a
 // different, E(lse), layer is considered.
 typedef bool path_continuation;
-#define I 0
-#define E 1
+const int I = 0;
+const int E = 1;
 // The DP algorithm uses the following score vector to store the score for each
 // vertex if the vertex is/is not selected and the path continues/does not
 // continue on it's layer (in case of layer vertices). Each dimension has the
