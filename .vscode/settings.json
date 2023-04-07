@@ -65,6 +65,9 @@
         "variant": "cpp",
         "algorithm": "cpp",
         "filesystem": "cpp",
-        "functional": "cpp"
+        "functional": "cpp",
+        "__tree": "cpp",
+        "set": "cpp",
+        "unordered_set": "cpp"
     }
 }
