@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.16)
 project(thesis)
 
-set (CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_VERBOSE TRUE)
 
 # set(gtest_DIR "/opt/homebrew/Cellar/googletest/1.13.0/lib/cmake/GTest")

@@ -75,6 +75,7 @@ struct Vertex {
 };
 bool operator==(const Vertex &a, const Vertex &b);
 bool operator!=(const Vertex &a, const Vertex &b);
+bool operator<(const Vertex &a, const Vertex &b);
 
 // DP score calculation.
 // For each vertex we consider the score when it is selected or not selected.

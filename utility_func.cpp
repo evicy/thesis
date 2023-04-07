@@ -1,5 +1,3 @@
-#include "utility_func.hpp"
-
 #include <cassert>
 #include <fstream>
 #include <iostream>
@@ -8,6 +6,8 @@
 #include <vector>
 #include <climits>
 #include <tuple>
+
+#include "utility_func.hpp"
 
 using namespace std;
 
@@ -121,6 +121,10 @@ bool operator==(const Vertex &a, const Vertex &b) {
 }
 
 bool operator!=(const Vertex &a, const Vertex &b) { return !(a == b); }
+
+bool operator<(const Vertex &a, const Vertex &b) {
+    return tie(a.segment, a.layer, a.index) < tie(b.segment, b.layer, b.index);
+}
 
 std::ostream &operator<<(std::ostream &os, Vertex const &v) {
     return os << "(" << v.segment << "," << v.layer << "," << v.index << ")";
@@ -258,7 +262,7 @@ int findMaxScoringPaths(const eds_matrix &eds_segments,
                                   getScore(scores, a, SURELY_SELECTED)),
                         a, !SURELY_SELECTED);
                 }
-                // 1st (lowest) layer vertex.
+                // L = 1 layer vertex.
                 else if (isFirstLayerVertex(a, eds_segments)) {
                     // 1_first vertex.
                     if (isVertexFirstOnLayer(a, eds_segments)) {
@@ -676,7 +680,8 @@ vector<vector<Vertex>> getPaths(const eds_matrix &eds_segments,
                                     if (!current_path.empty()) {
                                         paths.emplace_back(current_path);
                                         current_path = layer_path;
-                                    }
+                                    } 
+                                    current_path = layer_path;
                                 }
                             }
                             // Vertex is not selected.
@@ -795,13 +800,20 @@ vector<vector<Vertex>> getPaths(const eds_matrix &eds_segments,
     if (!current_path.empty()) {
         paths.emplace_back(current_path);
     }
+
+    // Reverse the paths.
+    for (auto &path : paths) {
+        reverse(path.begin(), path.end());
+    }
+
     return paths;
 }
 
 void printPaths(vector<vector<Vertex>> paths) {
     for (const auto &path : paths) {
-        for (const auto &vertex : path) {
-            cout << vertex;
+        // The vertices on the path are in reverse order.
+        for (const Vertex &v : path) {
+            cout << v;
         }
         cout << endl;
     }

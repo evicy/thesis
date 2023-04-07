@@ -1,5 +1,6 @@
-// g++ -std=c++17 utility_func.cpp  main.cpp -o main
-// clang++ -std=c++17 utility_func.cpp  main.cpp -o main
+// cd build
+// make
+// ./main
 
 #include <iostream>
 
@@ -8,7 +9,7 @@
 using namespace std;
 
 int main(int argc, char* argv[]) {
-    string EDS = readEDSFile(argc > 1 ? argv[1] : "../input_01.txt");
+    string EDS = readEDSFile(argc > 1 ? argv[1] : "../unit_tests/test_inputs/input_01.txt");
 
     eds_matrix eds_segments = EDSToMatrix(EDS);
     weight_matrix weights = getGCContentWeights(eds_segments);
