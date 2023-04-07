@@ -1,12 +1,9 @@
-# Identifying Clusters in Graph Representations of Genomes
-## Master's thesis
-
+## Identifying Clusters in Graph Representations of Genomes
 Dynamic programming algorithm to find maximum-scoring disjoint paths in n-layered bubble graphs.
 
 ### Compilation
 ```
 cd main_program/build
-// Without testing run:
 make main
 ```
 
@@ -20,6 +17,6 @@ The program accepts Elastic-degenerate strings, EDS for short, which represents 
 ### Tests
 The tests use GoogleTests, make sure you have the module installed and add the path to CMakeLists.txt file.
 ```
-make
+make test
 ./test
 ```
