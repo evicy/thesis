@@ -362,3 +362,19 @@ TEST_F(PathFindingTest, Mix06) {
     EXPECT_EQ(set<vector<Vertex>>(this->paths.begin(), this->paths.end()),
               expected);
 }
+
+TEST_F(PathFindingTest, Mix07) {
+    GetPaths("_GGAG{CCAAA,AGGGA,TATGC,ATGAC,GAC}CAGTT{TC,GC,TT,GAC}CAGG_");
+    EXPECT_EQ(this->score, 6);
+    set<vector<Vertex>> expected;
+    expected.insert({Vertex(0, 0, 1), Vertex(0, 0, 2), Vertex(0, 0, 3),
+                     Vertex(0, 0, 4), Vertex(1, 0, 0), Vertex(1, 0, 1)});
+    expected.insert({Vertex(1, 1, 1), Vertex(1, 1, 2), Vertex(1, 1, 3)});
+    expected.insert({Vertex(1, 2, 3), Vertex(1, 2, 4), Vertex(2, 0, 0),
+                     Vertex(2, 0, 1), Vertex(2, 0, 2)});
+    expected.insert({Vertex(3, 1, 0), Vertex(3, 1, 1), Vertex(4, 0, 0),
+                     Vertex(4, 0, 1), Vertex(4, 0, 2), Vertex(4, 0, 3),
+                     Vertex(4, 0, 4)});
+    EXPECT_EQ(set<vector<Vertex>>(this->paths.begin(), this->paths.end()),
+              expected);
+}
