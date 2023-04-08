@@ -1,13 +1,13 @@
+#include "utility_func.hpp"
+
 #include <cassert>
+#include <climits>
 #include <fstream>
 #include <iostream>
 #include <sstream>
 #include <string>
-#include <vector>
-#include <climits>
 #include <tuple>
-
-#include "utility_func.hpp"
+#include <vector>
 
 using namespace std;
 
@@ -402,76 +402,173 @@ int findMaxScoringPaths(const eds_matrix &eds_segments,
                 }
                 // J vertex.
                 else if (isJVertex(a, eds_segments)) {
-                    // W(a, 1) = w(a) + max{
-                    //      W(p1, 0, I) + W(p2, 0, E) +...+ W(pb, 0, E) - x,
-                    //                         ...
-                    //______W(p1, 0, E) + W(p2, 0, E) +...+ W(pb, 0, I) - x,
-                    //      W(p1, 1, I) + W(p2, 0, E) +...+ W(pb, 0, E),
-                    //                         ...
-                    //______W(p1, 1, E) + W(p2, 0, E) +...+ W(pb, 0, I),
-                    //______               .  .  .  .
-                    //      W(p1, 0, I) + W(p2, 0, E) +...+ W(pb, 1, E),
-                    //                         ...
-                    //      W(p1, 0, E) + W(p2, 0, E) +...+ W(pb, 1, I) }
-                    // where b is the number of layers in the current bubble.
-                    int num_preds = eds_segments[segment - 1].size();
+                    // W(a, 1) = w(a) + max{group_1, group_2, group_3}.
+                    //
                     // Get all predecessors.
+                    int num_preds = eds_segments[segment - 1].size();
                     vector<Vertex> a_preds(num_preds);
                     for (int i = 0; i < num_preds; i++) {
                         a_preds[i] = getPredecessorVertex(eds_segments, a, i);
                     }
-                    // To avoid n^3 runtime complexity of W(a, 1), calculate a
-                    // base score that is going to be modified:
+
+                    // Calculate the base score that is going to be modified:
                     // w(a) + W(p1, 0, E) +  W(p2, 0, E) + ... + W(pb, 0, E)
                     int base_score = 0;
                     for (const Vertex &p : a_preds) {
                         base_score += getScore(scores, p, !SURELY_SELECTED, E);
                     }
-                    // Choose max sum for W(a, 1) based on the rules.
-                    // 1st group in max:
+
                     int choice_a_1 = -1;
                     int score_a_1 = INT_MIN;
-                    for (int path_I = 0; path_I < num_preds; path_I++) {
+                    // Calculate the groups first:
+                    //
+                    // Group 1: no predecessor vertex is selected:
+                    // group_1 = max{
+                    //      W(p1, 0, I) + W(p2, 0, E) +...+ W(pb, 0, E) - x,
+                    //      W(p1, 0, E) + W(p2, 0, I) +...+ W(pb, 0, E) - x,
+                    //                         ...
+                    //      W(p1, 0, E) + W(p2, 0, E) +...+ W(pb, 0, I) - x }
+                    // Code the choice: i.
+                    for (int p_i = 0; p_i < num_preds; p_i++) {
                         int current_score = base_score -
-                                            getScore(scores, a_preds[path_I],
+                                            getScore(scores, a_preds[p_i],
                                                      !SURELY_SELECTED, E) +
-                                            getScore(scores, a_preds[path_I],
+                                            getScore(scores, a_preds[p_i],
                                                      !SURELY_SELECTED, I) -
                                             penalty;
                         if (score_a_1 < current_score) {
                             score_a_1 = current_score;
-                            choice_a_1 = path_I;
+                            choice_a_1 = p_i;
                         }
                     }
-                    // Remaining groups:
-                    for (int selected_pred = 0; selected_pred < num_preds;
-                         selected_pred++) {
-                        int temp_base_score =
+
+                    // Group 2: predecessor p_i is selected and pah continues on
+                    // layer L_i: group_2 = max{
+                    //      W(p1, 1, I) + W(p2, 0, E) +...+ W(pb, 0, E),
+                    //      W(p1, 0, E) + W(p2, 1, I) +...+ W(pb, 0, E),
+                    //                         ...
+                    //      W(p1, 0, E) + W(p2, 0, E) +...+ W(pb, 1, I) }
+                    // Code the choice: b + i.
+                    for (int p_i = 0; p_i < num_preds; p_i++) {
+                        int current_score =
                             base_score -
-                            getScore(scores, a_preds[selected_pred],
-                                     !SURELY_SELECTED, E) +
-                            getScore(scores, a_preds[selected_pred],
-                                     SURELY_SELECTED, E);
-                        for (int path_I = 0; path_I < num_preds; path_I++) {
-                            int current_score =
-                                temp_base_score -
-                                getScore(scores, a_preds[path_I],
-                                         selected_pred == path_I
-                                             ? SURELY_SELECTED
-                                             : !SURELY_SELECTED,
-                                         E) +
-                                getScore(scores, a_preds[path_I],
-                                         selected_pred == path_I
-                                             ? SURELY_SELECTED
-                                             : !SURELY_SELECTED,
-                                         I);
-                            if (score_a_1 < current_score) {
-                                score_a_1 = current_score;
-                                choice_a_1 =
-                                    (selected_pred + 1) * num_preds + path_I;
-                            }
+                            getScore(scores, a_preds[p_i], !SURELY_SELECTED,
+                                     E) +
+                            getScore(scores, a_preds[p_i], SURELY_SELECTED, I);
+                        if (score_a_1 < current_score) {
+                            score_a_1 = current_score;
+                            choice_a_1 = p_i + num_preds;
                         }
                     }
+
+                    // Group 3: predecessor p_i is selected and the path
+                    // continues on layer L_j, i ≠ j.
+                    //
+                    // Find best predecessors, i.e. the predecessor to be chosen
+                    // and the predecessor which is on the layer where the path
+                    // continued to from the bubble's start vertex.
+                    // Search for also the second best ones in case of i = j.
+                    // Find p_i, p_j where W(p_x, 0, I) - W(p_x, 0, E) is the
+                    // largest.
+                    int p_I_max = -1;
+                    int p_I_max_score_diff = INT_MIN;
+                    int p_I_second = -1;
+                    int p_I_second_score_diff = INT_MIN;
+                    // Find p_k, p_l where W(p_x, 1, E) - W(p_x, 0, E) is the
+                    // largest.
+                    int p_SELECTED_max = -1;
+                    int p_SELECTED_max_score_diff = INT_MIN;
+                    int p_SELECTED_second = -1;
+                    int p_SELECTED_second_score_diff = INT_MIN;
+                    for (int p_i = 0; p_i < num_preds; p_i++) {
+                        int I_diff =
+                            getScore(scores, a_preds[p_i], !SURELY_SELECTED,
+                                     I) -
+                            getScore(scores, a_preds[p_i], !SURELY_SELECTED, E);
+                        if (I_diff > p_I_max_score_diff) {
+                            p_I_second_score_diff = p_I_max_score_diff;
+                            p_I_second = p_I_max;
+                            p_I_max_score_diff = I_diff;
+                            p_I_max = p_i;
+                        } else if (I_diff > p_I_second_score_diff) {
+                            p_I_second_score_diff = I_diff;
+                            p_I_second = p_i;
+                        }
+
+                        int SELECTED_diff =
+                            getScore(scores, a_preds[p_i], SURELY_SELECTED, E) -
+                            getScore(scores, a_preds[p_i], !SURELY_SELECTED, E);
+                        if (SELECTED_diff > p_SELECTED_max_score_diff) {
+                            p_SELECTED_second_score_diff =
+                                p_SELECTED_max_score_diff;
+                            p_SELECTED_second = p_SELECTED_max;
+                            p_SELECTED_max_score_diff = SELECTED_diff;
+                            p_SELECTED_max = p_i;
+                        } else if (SELECTED_diff >
+                                   p_SELECTED_second_score_diff) {
+                            p_SELECTED_second_score_diff = SELECTED_diff;
+                            p_SELECTED_second = p_i;
+                        }
+                    }
+                    // Select the two predecessors that maximise the sum.
+                    // Let p_x be the surely selected vertex and let L_y be the
+                    // layer of path continuation.
+                    // Code the choice as: 2b + b*x + y.
+                    // Take the two maximalising predecessors p_i and p_k if
+                    // they are not the same.
+                    if (p_I_max != p_SELECTED_max) {
+                        int current_score =
+                            base_score -
+                            getScore(scores, a_preds[p_I_max], !SURELY_SELECTED,
+                                     E) +
+                            getScore(scores, a_preds[p_I_max], !SURELY_SELECTED,
+                                     I) -
+                            getScore(scores, a_preds[p_SELECTED_max],
+                                     !SURELY_SELECTED, E) +
+                            getScore(scores, a_preds[p_SELECTED_max],
+                                     SURELY_SELECTED, E);
+                        if (score_a_1 < current_score) {
+                            score_a_1 = current_score;
+                            choice_a_1 = 2 * num_preds +
+                                         num_preds * p_SELECTED_max + p_I_max;
+                        }
+                    } else {
+                        // Try p_i and p_l if p_i and p_k were the same.
+                        int current_score =
+                            base_score -
+                            getScore(scores, a_preds[p_I_max], !SURELY_SELECTED,
+                                     E) +
+                            getScore(scores, a_preds[p_I_max], !SURELY_SELECTED,
+                                     I) -
+                            getScore(scores, a_preds[p_SELECTED_second],
+                                     !SURELY_SELECTED, E) +
+                            getScore(scores, a_preds[p_SELECTED_second],
+                                     SURELY_SELECTED, E);
+                        if (score_a_1 < current_score) {
+                            score_a_1 = current_score;
+                            choice_a_1 = 2 * num_preds +
+                                         num_preds * p_SELECTED_second +
+                                         p_I_max;
+                        }
+                        // Try p_j and p_k if p_i and p_k were the same.
+                        current_score =
+                            base_score -
+                            getScore(scores, a_preds[p_I_second],
+                                     !SURELY_SELECTED, E) +
+                            getScore(scores, a_preds[p_I_second],
+                                     !SURELY_SELECTED, I) -
+                            getScore(scores, a_preds[p_SELECTED_max],
+                                     !SURELY_SELECTED, E) +
+                            getScore(scores, a_preds[p_SELECTED_max],
+                                     SURELY_SELECTED, E);
+                        if (score_a_1 < current_score) {
+                            score_a_1 = current_score;
+                            choice_a_1 = 2 * num_preds +
+                                         num_preds * p_SELECTED_max +
+                                         p_I_second;
+                        }
+                    }
+
                     setScoreAndChoice(
                         scores, choices,
                         make_pair(weight_a + score_a_1, choice_a_1), a,
@@ -593,23 +690,11 @@ vector<vector<Vertex>> getPaths(const eds_matrix &eds_segments,
             for (int layer = 0; layer < num_preds; layer++) {
                 j_preds[layer] = getPredecessorVertex(eds_segments, a, layer);
             }
-            // W(a, 1) = w(a) + max{
-            //      W(p1, 0, I) + W(p2, 0, E) +...+ W(pb, 0, E) - x,
-            //                         ...
-            //______W(p1, 0, E) + W(p2, 0, E) +...+ W(pb, 0, I) - x,
-            //      W(p1, 1, I) + W(p2, 0, E) +...+ W(pb, 0, E),
-            //                         ...
-            //______W(p1, 1, E) + W(p2, 0, E) +...+ W(pb, 0, I),
-            //______               .  .  .  .
-            //      W(p1, 0, I) + W(p2, 0, E) +...+ W(pb, 1, E),
-            //                         ...
-            //      W(p1, 0, E) + W(p2, 0, E) +...+ W(pb, 1, I) }
-            // where b is the number of layers in the current bubble.
-            //______________________________________________________
+            // W(a, 1) = w(a) + max{group_1, group_2, group_3}.
             // W(a, 0) = max{
             //      W(p1, 0, I) + W(p2, 0, E) +...+ W(pb, 0, E),
             //                         ...
-            //______W(p1, 0, E) + W(p2, 0, E) +...+ W(pb, 0, I),
+            //      W(p1, 0, E) + W(p2, 0, E) +...+ W(pb, 0, I),
             //      W(a, 1)
             // where b is the number of layers in the current bubble.
 
@@ -627,22 +712,33 @@ vector<vector<Vertex>> getPaths(const eds_matrix &eds_segments,
                 }
             }
 
+            // From the saved choice, we can determine which predecessor is
+            // surely selected, if any.
+            int group = choice / num_preds;
+
             // From the saved choice, we can get the line of the rule which
             // encodes the layer, L, where the path continues from the start
-            // vertex. In both W(a, 0) and W(a, 1) the rule line unambiguously
-            // encodes this.
+            // vertex.
             int rule_line = choice % num_preds;
-            // Based on the rule group (every `num_preds` lines), we can get
-            // which predecessor of `j` has to be surely selected. If W(a, 0) ==
-            // W(a, 1), the choice stores which W(a, 1) rule was chosen. This
-            // chosen rule is "moved by" a rule group.
-            int surely_selected_j_p_layer = -1;
+
+            // If W(a, 0) = W(a, 1).
             if (choice >= num_preds) {
-                int rule_group = choice / num_preds;
-                if (is_a_surely_selected) {
-                    surely_selected_j_p_layer = rule_group - 1;
-                } else if (rule_group >= 2) {
-                    surely_selected_j_p_layer = rule_group - 2;
+                choice = getChoice(choices, j, SURELY_SELECTED);
+            }
+
+            // Based on the rule group (every `num_preds` lines), we can get
+            // which predecessor of `j` has to be surely selected.
+            int surely_selected_j_p_layer = -1;
+            if (is_a_surely_selected && choice >= num_preds) {
+                // A predecessor was surely selected.
+                // W(a, 1) = group_2.
+                if (choice / num_preds < 2) {
+                    surely_selected_j_p_layer = choice % num_preds;
+                }
+                // W(a, 1) = group_3.
+                else {
+                    surely_selected_j_p_layer =
+                        (choice - 2 * num_preds) / num_preds;
                 }
             }
 
@@ -680,7 +776,7 @@ vector<vector<Vertex>> getPaths(const eds_matrix &eds_segments,
                                     if (!current_path.empty()) {
                                         paths.emplace_back(current_path);
                                         current_path = layer_path;
-                                    } 
+                                    }
                                     current_path = layer_path;
                                 }
                             }
