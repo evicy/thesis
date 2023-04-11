@@ -907,7 +907,6 @@ vector<vector<Vertex>> getPaths(const eds_matrix &eds_segments,
 
 void printPaths(vector<vector<Vertex>> paths) {
     for (const auto &path : paths) {
-        // The vertices on the path are in reverse order.
         for (const Vertex &v : path) {
             cout << v;
         }
