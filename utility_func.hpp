@@ -164,4 +164,17 @@ vector<vector<Vertex>> getPaths(const eds_matrix &eds_segments,
 // Prints out the paths that were found by `getPaths()`.
 void printPaths(vector<vector<Vertex>> paths);
 
+// Returns the sum length of all paths in `paths`.
+int lengthOfPaths(vector<vector<Vertex>> paths);
+
+// Returns the average length of paths.
+double pathsAverageLength(vector<vector<Vertex>> paths);
+
+// Calculates the length of flattened `eds_matrix`.
+int linearizedGraphLength(const eds_matrix &eds_segments);
+
+// Calculates the ratio of the graph that is covered by paths.
+double pathCoverPercentage(const eds_matrix &eds_segments,
+                           vector<vector<Vertex>> paths);
+
 #endif

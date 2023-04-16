@@ -1,5 +1,7 @@
 #include "utility_func.hpp"
 
+#include <math.h>
+
 #include <cassert>
 #include <climits>
 #include <fstream>
@@ -912,4 +914,33 @@ void printPaths(vector<vector<Vertex>> paths) {
         }
         cout << endl;
     }
+}
+
+int lengthOfPaths(vector<vector<Vertex>> paths) {
+    int length = 0;
+    for (const auto &path : paths) {
+        length += path.size();
+    }
+    return length;
+}
+
+double pathsAverageLength(vector<vector<Vertex>> paths) {
+    return (double) lengthOfPaths(paths) / paths.size();
+}
+
+int linearizedGraphLength(const eds_matrix &eds_segments) {
+    int length = 0;
+    for (const auto &segment : eds_segments) {
+        for (const auto &layer : segment) {
+            length += layer.length();
+        }
+    }
+    return length;
+}
+
+double pathCoverPercentage(const eds_matrix &eds_segments,
+                           vector<vector<Vertex>> paths) {
+    int graph_len = linearizedGraphLength(eds_segments);
+    int paths_len = lengthOfPaths(paths);
+    return (double)paths_len / graph_len * 100;
 }

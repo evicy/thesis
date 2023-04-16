@@ -7,7 +7,7 @@
 
 using namespace std;
 
-TEST(InputProcessing, readEDSFileTest) {
+TEST(InputProcessing, ReadEDSFileTest) {
     EXPECT_EQ(readEDSFile("../unit_tests/test_inputs/input_01.txt"),
               "_GG{AGAA,GGGA,,ACCCCC}{AG,G}AGG{A,G}{C,}{A,AG}G{A,GA,CCC}{,A}_");
 }
@@ -35,6 +35,37 @@ TEST(InputProcessing, EDSToMatrixTest) {
     expected.emplace_back(vector<string>{"_"});
 
     EXPECT_EQ(eds_segments, expected);
+}
+
+TEST(InputProcessing, LinearizedGraphLengthTest) {
+    string EDS =
+        "_GG{AGAA,GGGA,,ACCCCC}{AG,G}AGG{A,G}{C,}{A,AG}G{A,GA,CCC}{,A}_";
+    eds_matrix eds_segments = EDSToMatrix(EDS);
+
+    EXPECT_EQ(linearizedGraphLength(eds_segments), 45);
+}
+
+TEST(InputProcessing, PathsLengthTest) {
+    vector<vector<Vertex>> paths;
+    paths.push_back({Vertex(0, 0, 1), Vertex(0, 0, 2), Vertex(1, 0, 0)});
+    paths.push_back({Vertex(1, 1, 2), Vertex(1, 1, 3)});
+    paths.push_back(
+        {Vertex(1, 4, 1), Vertex(1, 4, 2), Vertex(1, 4, 3), Vertex(1, 4, 4)});
+    EXPECT_EQ(lengthOfPaths(paths), 9);
+}
+
+TEST(InputProcessing, PathCoverRatioTest) {
+    vector<vector<Vertex>> paths;
+    string EDS =
+        "_GG{AGAA,GGGA,,ACCCCC}{AG,G}AGG{A,G}{C,}{A,AG}G{A,GA,CCC}{,A}_";
+    eds_matrix eds_segments = EDSToMatrix(EDS);
+    ASSERT_EQ(linearizedGraphLength(eds_segments), 45);
+    paths.push_back({Vertex(0, 0, 1), Vertex(0, 0, 2), Vertex(1, 0, 0)});
+    paths.push_back({Vertex(1, 1, 2), Vertex(1, 1, 3)});
+    paths.push_back({Vertex(4, 0, 1), Vertex(4, 0, 2), Vertex(5, 1, 0),
+                     Vertex(6, 0, 0), Vertex(7, 0, 0)});
+    ASSERT_EQ(lengthOfPaths(paths), 10);
+    EXPECT_EQ(pathCoverPercentage(eds_segments, paths), (double)10/45 * 100);
 }
 
 class PathFindingTest : public testing::Test {
