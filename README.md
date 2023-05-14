@@ -3,7 +3,9 @@ Dynamic programming algorithm to find maximum-scoring disjoint paths in n-layere
 
 ### Compilation
 ```
+mkdir build
 cd build
+cmake ..
 make main
 ```
 
